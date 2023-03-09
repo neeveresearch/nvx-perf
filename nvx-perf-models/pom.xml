@@ -1,0 +1,49 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>nvx-perf-models</artifactId>
+    <packaging>jar</packaging>
+    <name>Models</name>
+
+    <parent>
+        <groupId>com.neeve</groupId>
+        <artifactId>nvx-perf-parent</artifactId>
+        <version>3.16-SNAPSHOT</version>
+    </parent>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.neeve</groupId>
+                <artifactId>nvx-adm-maven-plugin</artifactId>
+                <version>${nvx.talon.version}</version>
+                <executions>
+                    <execution>
+                        <id>Xbuf2</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>adm-generate</goal>
+                        </goals>
+                        <configuration>
+                            <modelFile>${basedir}/src/main/resources/rumi/model.xml</modelFile>
+                            <namespace>com.neeve.perf.serialization.rumi.xbuf2</namespace>
+                            <encodingType>Xbuf2</encodingType>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>Protobuf</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>adm-generate</goal>
+                        </goals>
+                        <configuration>
+                            <modelFile>${basedir}/src/main/resources/rumi/model.xml</modelFile>
+                            <namespace>com.neeve.perf.serialization.rumi.protobuf</namespace>
+                            <encodingType>Protobuf</encodingType>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

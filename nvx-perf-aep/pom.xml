@@ -1,0 +1,113 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>nvx-perf-aep</artifactId>
+    <packaging>jar</packaging>
+    <name>AEP</name>
+
+    <parent>
+        <groupId>com.neeve</groupId>
+        <artifactId>nvx-perf-parent</artifactId>
+        <version>3.16-SNAPSHOT</version>
+    </parent>
+
+    <properties>
+        <nvx.robin.version>2.12.18</nvx.robin.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.9</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.neeve</groupId>
+                <artifactId>nvx-adm-maven-plugin</artifactId>
+                <version>${nvx.rumi.version}</version>
+                <executions>
+                    <execution>
+                        <id>State</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>adm-generate</goal>
+                        </goals>
+                        <configuration>
+                            <modelFile>${project.basedir}/src/main/models/com/neeve/perf/aep/engine/state/model.xml</modelFile>
+                            <encodingType>Xbuf2</encodingType>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>Messages</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>adm-generate</goal>
+                        </goals>
+                        <configuration>
+                            <modelFile>${project.basedir}/src/main/models/com/neeve/perf/aep/messages/model.xml</modelFile>
+                            <encodingType>Xbuf2</encodingType>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>com.neeve</groupId>
+                <artifactId>nvx-robin-maven-plugin</artifactId>
+                <version>${nvx.robin.version}</version>
+                <executions>
+                    <execution>
+                        <id>Xar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>xar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>linux-x86-64</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.neeve</groupId>
+                    <artifactId>nvx-native</artifactId>
+                    <classifier>linux-x86-64</classifier>
+                    <version>${nvx.native.version}</version>
+                </dependency>
+            </dependencies>
+
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>2.4</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>dist-linux-x86-64</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <inherited>false</inherited>
+                                <configuration>
+                                    <attach>true</attach>
+                                    <tarLongFileMode>gnu</tarLongFileMode>
+                                    <descriptor>distribution-linux-x86-64.xml</descriptor>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

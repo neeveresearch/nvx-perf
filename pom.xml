@@ -1,0 +1,267 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.neeve</groupId>
+    <artifactId>nvx-perf-parent</artifactId>
+    <packaging>pom</packaging>
+    <version>3.16-SNAPSHOT</version>
+    <name>Performance Parent</name>
+
+    <parent>
+        <groupId>com.neeve</groupId>
+        <artifactId>nvx-os-parent</artifactId>
+        <version>1.0</version>
+    </parent>
+
+    <organization>
+        <name>Neeve Research, LLC</name>
+        <url>http://www.neeveresearch.com</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+            <comments>A business-friendly OSS license</comments>
+        </license>
+    </licenses>
+
+    <properties>
+        <nvx.talon.version>3.16.33</nvx.talon.version>
+        <nvx.solace.version>3.16.19</nvx.solace.version>
+        <nvx.jms.version>3.16.19</nvx.jms.version>
+        <nvx.kafka.version>1.8.18</nvx.kafka.version>
+        <nvx.native.version>3.16.20</nvx.native.version>
+    </properties>
+
+    <modules>
+        <module>nvx-perf-common</module>
+        <module>nvx-perf-time</module>
+        <module>nvx-perf-models</module>
+        <module>nvx-perf-serialization</module>
+        <module>nvx-perf-link</module>
+        <module>nvx-perf-messaging</module>
+    </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-talon</artifactId>
+            <version>${nvx.talon.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-solace</artifactId>
+            <version>${nvx.solace.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-jms</artifactId>
+            <version>${nvx.jms.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-kafka</artifactId>
+            <version>${nvx.kafka.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.activemq</groupId>
+            <artifactId>activemq-client</artifactId>
+            <version>5.13.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- configure jar manifests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.2</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Created-By>Maven</Created-By>
+                            <Specification-Title>${project.artifactId}</Specification-Title>
+                            <Specification-Version>${project.version}</Specification-Version>
+                            <Specification-Vendor>${vendor.name}</Specification-Vendor>
+                            <Implementation-Title>${project.artifactId}</Implementation-Title>
+                            <Implementation-Version>${project.version}</Implementation-Version>
+                            <Implementation-Vendor>${vendor.name}</Implementation-Vendor>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>2.5</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <version>3.5</version>
+              <configuration>
+                <source>1.8</source>
+                <target>1.8</target>
+              </configuration>
+            </plugin>
+        </plugins>
+
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>2.4</version>
+                    <configuration>
+                        <properties>
+                            <property>
+                                <name>nvx.talon.version</name>
+                                <version>[3.16.0,3.16.10000]</version>
+                                <dependencies>
+                                    <dependency>
+                                        <groupId>com.neeve</groupId>
+                                        <artifactId>nvx-talon</artifactId>
+                                    </dependency>
+                                </dependencies>
+                            </property>
+                            <property>
+                                <name>nvx.solace.version</name>
+                                <version>[3.16.0,3.16.10000]</version>
+                                <dependencies>
+                                    <dependency>
+                                        <groupId>com.neeve</groupId>
+                                        <artifactId>nvx-solace</artifactId>
+                                    </dependency>
+                                </dependencies>
+                            </property>
+                            <property>
+                                <name>nvx.jms.version</name>
+                                <version>[3.16.0,3.16.10000]</version>
+                                <dependencies>
+                                    <dependency>
+                                        <groupId>com.neeve</groupId>
+                                        <artifactId>nvx-jms</artifactId>
+                                    </dependency>
+                                </dependencies>
+                            </property>
+                            <property>
+                                <name>nvx.kafka.version</name>
+                                <version>[1.8.0,1.8.10000]</version>
+                                <dependencies>
+                                    <dependency>
+                                        <groupId>com.neeve</groupId>
+                                        <artifactId>nvx-kafka</artifactId>
+                                    </dependency>
+                                </dependencies>
+                            </property>
+                            <property>
+                                <name>nvx.native.version</name>
+                                <version>[3.16.0,3.16.10000]</version>
+                                <dependencies>
+                                    <dependency>
+                                        <groupId>com.neeve</groupId>
+                                        <artifactId>nvx-native</artifactId>
+                                    </dependency>
+                                </dependencies>
+                            </property>
+                        </properties>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Central Repository</name>
+            <url>http://repo1.maven.org/maven2</url>
+            <layout>default</layout>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+        <!-- Visit http://license.neeveresearch.com to get credentials -->
+        <repository>
+            <id>neeve-public</id>
+            <url>http://nexus.neeveresearch.com/nexus/content/repositories/neeve-public/</url>
+            <name>Neeve Public Repository</name>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+        <repository>
+            <id>neeve-licensed</id>
+            <url>http://nexus.neeveresearch.com/nexus/content/repositories/neeve-licensed/</url>
+            <name>Neeve Licensed Repository</name>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>central</id>
+            <name>Maven Plugin Repository</name>
+            <url>http://repo1.maven.org/maven2</url>
+            <layout>default</layout>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+        </pluginRepository>
+        <!-- Visit http://license.neeveresearch.com to get credentials -->
+        <pluginRepository>
+            <id>neeve-licensed</id>
+            <url>http://nexus.neeveresearch.com/nexus/content/repositories/neeve-licensed/</url>
+            <name>Neeve Licensed Repository</name>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <profiles>
+        <profile>
+            <id>linux-x86-64</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.neeve</groupId>
+                    <artifactId>nvx-native</artifactId>
+                    <classifier>linux-x86-64</classifier>
+                    <version>${nvx.native.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>

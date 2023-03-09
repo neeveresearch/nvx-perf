@@ -1,0 +1,164 @@
+<?xml version="1.0"?>
+<model xmlns="http://www.neeveresearch.com/schema/x-ddl" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <env>
+        <!-- App configuration -->
+        <driver>
+            <sendRate>100000</sendRate>
+            <sendCount>10000000</sendCount>
+        </driver>
+    </env>
+
+    <busProviders>
+        <provider name="local" providerClass="com.neeve.perf.aep.engine.driver.local.LocalProvider" />
+    </busProviders>
+
+    <buses>
+        <bus name="processor" descriptor="local://.">
+            <channels>
+                <channel name="client" id="1"/>
+            </channels>
+        </bus>
+    </buses>
+
+    <apps>
+        <app name="processor" mainClass="com.neeve.perf.aep.engine.es.Processor">
+            <messaging>
+                <factories>
+                    <factory name="com.neeve.perf.aep.messages.MessageFactory"/>
+                </factories>
+                <bus name="processor">
+                    <channels>
+                        <channel name="client" join="true"/>
+                    </channels>
+                    <detachedSend enabled="false"/>
+                </bus>
+            </messaging>
+
+            <inboundEventMultiplexing type="FreeThreadedSerialized">
+                <queueDepth>32</queueDepth>
+                <queueDrainerCpuAffinityMask>${processor.muxaffinity::[2]}</queueDrainerCpuAffinityMask>
+            </inboundEventMultiplexing>
+
+            <storage enabled="false">
+                <discoveryDescriptor>mcast://224.0.1.200:4091&amp;localIfAddr=${CLUSTER_DISCOVERY_LOCALIFADDR::0.0.0.0}</discoveryDescriptor>
+
+                <factories>
+                    <factory name="com.neeve.perf.aep.messages.MessageFactory"/>
+                </factories>
+
+                <clustering enabled="true">
+                    <localIfAddr>${CLUSTER_REPLICATOR_LOCALIFADDR::0.0.0.0}</localIfAddr>
+                    <localPort>${CLUSTER_REPLICATOR_LOCALIFPORT::0}</localPort>
+                </clustering>
+
+                <persistenceQuorum>1</persistenceQuorum>
+                <persistence enabled="true">
+                    <storeRoot>${TLOG_LOCATION::rdat}</storeRoot>
+                    <detachedPersist enabled="false"/>
+                    <flushOnCommit>true</flushOnCommit>
+                    <autoFlushSize>0</autoFlushSize>
+                    <initialLogLength>20</initialLogLength>
+                    <pageSize>4096</pageSize>
+                    <zeroOutInitial>true</zeroOutInitial>
+                    <flushUsingMappedMemory>true</flushUsingMappedMemory>
+                </persistence>
+            </storage>
+
+            <replicationPolicy>Asynchronous</replicationPolicy>
+            <setSupportMetadata>false</setSupportMetadata>
+            <setOutboundSequenceNumbers>false</setOutboundSequenceNumbers>
+            <captureTransactionLatencyStats>false</captureTransactionLatencyStats>
+        </app>
+    </apps>
+
+    <servers>
+        <templates>
+            <server name="server-template">
+                <provisioning>
+                    <jvm>
+                        <jvmParamSets>
+                            <jvmParamSet name="prefer-ipv4">
+                                <jvmParams>-Djava.net.preferIPv4Stack=true</jvmParams>
+                            </jvmParamSet>
+                            <jvmParamSet name="heap-size" order="-1">
+                                <jvmParams>${HEAP_SIZE_PARAMS}</jvmParams>
+                            </jvmParamSet>
+                            <jvmParamSet name="gc-tuning" order="0">
+                                <jvmParams>-server</jvmParams>
+                            </jvmParamSet>
+                        </jvmParamSets>
+                    </jvm>
+                </provisioning>
+            </server>
+        </templates>
+
+        <server name="processor-1a" template="server-template">
+            <heartbeats enabled="true" interval="1"/>
+            <apps>
+                <app name="processor" autoStart="true"/>
+            </apps>
+        </server>
+    </servers>
+
+    <profiles>
+        <profile name="n5">
+            <activation>
+                <properties>
+                    <lumino.agent.env>neeve-lab</lumino.agent.env>
+                </properties>
+            </activation>
+            <env>
+                <TLOG_LOCATION>/root/work/perf/tlog</TLOG_LOCATION>
+                <nv>
+                    <optimizefor>latency</optimizefor>
+                    <conservecpu>false</conservecpu>
+                    <optimizeMemoryUsage>false</optimizeMemoryUsage>
+                    <msg.latency.stats>false</msg.latency.stats>
+                    <discovery.descriptor>mcast://224.0.1.200:4090&amp;localIfAddr=${DISCOVERY_LOCALIFADDR::64.71.157.12}</discovery.descriptor>
+                    <log.directory>/root/work/perf/log/${nv.ddl.targetxvm}</log.directory>
+                </nv>
+            </env>
+
+            <servers>
+                <templates>
+                    <server name="server-template">
+                        <heartbeats enabled="true" interval="5">
+                            <includeMessageTypeStats>false</includeMessageTypeStats>
+                        </heartbeats>
+                        <provisioning>
+                            <host>${HOST::.}</host>
+                            <rootDirectory>/root/work/perf</rootDirectory>
+                            <jvm>
+                                <javaHome>%JAVA_HOME_ZULU_8%</javaHome>
+                            </jvm>
+                        </provisioning>
+                    </server>
+                </templates>
+
+                <server name="processor-1a">
+                    <env>
+                        <HOST>192.168.1.12</HOST>
+                        <HEAP_SIZE_PARAMS>-Xms8g -Xmx8g</HEAP_SIZE_PARAMS>
+                        <DISCOVERY_LOCALIFADDR>64.71.157.12</DISCOVERY_LOCALIFADDR>
+                        <CLUSTER_DISCOVERY_LOCALIFADDR>192.168.2.12</CLUSTER_DISCOVERY_LOCALIFADDR>
+                        <CLUSTER_REPLICATOR_LOCALIFADDR>192.168.2.12</CLUSTER_REPLICATOR_LOCALIFADDR>
+                        <CLUSTER_REPLICATOR_LOCALIFPORT>12000</CLUSTER_REPLICATOR_LOCALIFPORT>
+                    </env>
+                </server>
+            </servers>
+        </profile>
+        <profile name="primary">
+            <env>
+                <processor.mainaffinity>[1]</processor.mainaffinity>
+                <processor.muxaffinity>[3]</processor.muxaffinity>
+                <driver.sendAffinity>[2]</driver.sendAffinity>
+            </env>
+        </profile>
+        <profile name="backup">
+            <env>
+                <processor.mainaffinity>[1]</processor.mainaffinity>
+                <processor.muxaffinity>[3]</processor.muxaffinity>
+            </env>
+        </profile>
+    </profiles>
+</model>
