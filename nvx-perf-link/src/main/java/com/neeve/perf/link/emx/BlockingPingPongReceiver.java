@@ -28,8 +28,8 @@ import com.neeve.emx.EmxNwLnkReader;
 import com.neeve.emx.EmxNwLnkBlockingReader;
 import com.neeve.emx.EmxNwLnk;
 import com.neeve.io.IOBuffer;
-import com.neeve.tools.interactive.commands.AnnotatedCommand;
 import com.neeve.perf.common.SystemProperties;
+import com.neeve.tools.interactive.commands.AnnotatedCommand;
 
 @AnnotatedCommand.Command(keywords = "BlockingPingPongReceiver", description = "A blocking receiver to test ping pong performance using EMX links")
 public class BlockingPingPongReceiver extends AnnotatedCommand {
@@ -44,7 +44,7 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
     }
 
     final private class ReadCallback implements EmxNwLnkReader.Callback {
-        final private ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(serializedMessageSize)};
+        final private ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(messageSize)};
         private long start;
         private long deltaStart;
         private int numRcvd;
@@ -52,38 +52,46 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
 
         @Override
         final public int handleReadData(final EmxNwLnk link, final IOBuffer iobuf, final int length) {
-            final int count = length / serializedMessageSize; 
+            final int count = length / messageSize; 
             try {
                 if (count > 0) {
+                    // process
+                    int messageBoundary = 0;
                     for (int i = 0; i < count; i++) {
                         writeBuffers[0].clear();
-                        writeBuffers[0].limit(serializedMessageSize);
+                        writeBuffers[0].limit(messageSize);
+                        writeBuffers[0].putLong(0, iobuf.getLong(messageBoundary));
                         link.write(writeBuffers, 1);
+                        messageBoundary += messageSize;
                     }
-                    final long now = System.currentTimeMillis(); 
-                    if (start == 0l) {
-                        start = deltaStart = now;
-                    }
-                    numRcvd += count;
-                    deltaNumRcvd += count;
-                    if (now - deltaStart >= 1000l) {
-                        final long deltaRate = (deltaNumRcvd * 1000l) / (now - deltaStart);
-                        final long overallRate = (numRcvd * 1000l) / (now - start);
-                        System.out.println("RATE [" + deltaRate + "," + overallRate + "]");
-                        deltaStart = now;
-                        deltaNumRcvd = 0;
+
+                    // stats
+                    if (stats) {
+                        final long now = System.currentTimeMillis(); 
+                        if (start == 0l) {
+                            start = deltaStart = now;
+                        }
+                        numRcvd += count;
+                        deltaNumRcvd += count;
+                        if (now - deltaStart >= 1000l) {
+                            final long deltaRate = (deltaNumRcvd * 1000l) / (now - deltaStart);
+                            final long overallRate = (numRcvd * 1000l) / (now - start);
+                            System.out.println("[BlockingPingPongReceiver] RATE [" + deltaRate + "," + overallRate + "]");
+                            deltaStart = now;
+                            deltaNumRcvd = 0;
+                        }
                     }
                 }
             }
             catch (Throwable e) {
                 e.printStackTrace();
             }
-            return serializedMessageSize * count; 
+            return messageSize * count; 
         }
 
         @Override
         final public void handleLinkClosure(final EmxNwLnk lnk) {
-            System.out.println("Link closed by peer");
+            System.out.println("[BlockingPingPongReceiver] Link closed by peer");
         }
 
         @Override
@@ -93,15 +101,19 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
     }
 
     @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&tcpnodelay=true")
-    String descriptor;
+    private String descriptor;
 
-    @Option(shortForm = 's', longForm = "serializedMessageSize", defaultValue = "256", required = true, description = "The size of the packet to send")
-    int serializedMessageSize;
+    @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the the message being ping ponged")
+    private int messageSize;
+
+    @Option(shortForm = 's', longForm = "stats", defaultValue = "false", required = true, description = "Whether to output incremental throughput stats")
+    private boolean stats;
 
     public void execute() throws Exception {
         SystemProperties.dump();
         final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(descriptor, new AcceptCallback());
         final EmxNwLnk link = acceptor.accept();
+        link.configureBlockingWrite(true);
         new Thread(EmxNwLnkBlockingReader.create(link, new ReadCallback())).start();
     }
 
@@ -111,7 +123,7 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
             sender.run(args);
         }
         catch (Exception e) {
-            System.out.println("Received exception during benchmark run - " + e);
+            System.out.println("[BlockingPingPongReceiver] Received exception during benchmark run - " + e);
         }
     }
 }

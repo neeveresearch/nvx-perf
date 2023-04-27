@@ -21,8 +21,6 @@
  */
 package com.neeve.perf.link.emx;
 
-import java.nio.ByteBuffer;
-
 import com.neeve.emx.EmxNwLnkAcceptor;
 import com.neeve.emx.EmxNwLnkReader;
 import com.neeve.emx.EmxNwLnkNonBlockingReader;
@@ -59,26 +57,33 @@ public class NonBlockingStreamingReceiver extends AnnotatedCommand {
 
         @Override
         final public int handleReadData(final EmxNwLnk lnk, final IOBuffer iobuf, final int length) {
-            final int count = length / serializedMessageSize;
-            final long now = System.currentTimeMillis();
-            if (start == 0l) {
-                start = deltaStart = now;
+            // get count received
+            final int count = length / messageSize;
+
+            // stats
+            if (stats) {
+                final long now = System.currentTimeMillis();
+                if (start == 0l) {
+                    start = deltaStart = now;
+                }
+                numRcvd += count;
+                deltaNumRcvd += count;
+                if (now - deltaStart >= 1000l) {
+                    final long deltaRate = (deltaNumRcvd * 1000l) / (now - deltaStart);
+                    final long overallRate = (numRcvd * 1000l) / (now - start);
+                    System.out.println("[NonBlockingStreamingReceiver] RATE [" + deltaRate + "," + overallRate + "]");
+                    deltaStart = now;
+                    deltaNumRcvd = 0;
+                }
             }
-            numRcvd += count;
-            deltaNumRcvd += count;
-            if (now - deltaStart >= 1000l) {
-                final long deltaRate = (deltaNumRcvd * 1000l) / (now - deltaStart);
-                final long overallRate = (numRcvd * 1000l) / (now - start);
-                System.out.println("RATE [" + deltaRate + "," + overallRate + "]");
-                deltaStart = now;
-                deltaNumRcvd = 0;
-            }
-            return serializedMessageSize * count; 
+
+            // done
+            return messageSize * count; 
         }
 
         @Override
         final public void handleLinkClosure(final EmxNwLnk lnk) {
-            System.out.println("Link closed by peer");
+            System.out.println("[NonBlockingStreamingReceiver] Link closed by peer");
         }
 
         @Override
@@ -88,10 +93,13 @@ public class NonBlockingStreamingReceiver extends AnnotatedCommand {
     }
 
     @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&tcpnodelay=true")
-    String descriptor;
+    private String descriptor;
 
-    @Option(shortForm = 's', longForm = "serializedMessageSize", defaultValue = "256", required = true, description = "The size of the packet to send")
-    int serializedMessageSize;
+    @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the message being streamed")
+    private int messageSize;
+
+    @Option(shortForm = 's', longForm = "stats", defaultValue = "false", required = true, description = "Whether to output incremental throughput stats")
+    private boolean stats;
 
     private EmxNwLnkNonBlockingReader reader;
 
@@ -108,7 +116,7 @@ public class NonBlockingStreamingReceiver extends AnnotatedCommand {
             sender.run(args);
         }
         catch (Exception e) {
-            System.out.println("Received exception during benchmark run - " + e);
+            System.out.println("[NonBlockingStreamingReceiver] Received exception during benchmark run - " + e);
         }
     }
 }

@@ -22,67 +22,122 @@
 package com.neeve.perf.link.emx;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 
 import com.neeve.io.IOBuffer;
 import com.neeve.emx.EmxNwLnkConnector;
 import com.neeve.emx.EmxNwLnk;
+import com.neeve.perf.common.SystemProperties;
 import com.neeve.stats.Stats.LatencyManager;
 import com.neeve.tools.interactive.commands.AnnotatedCommand;
-import com.neeve.perf.common.SystemProperties;
+import com.neeve.util.UtlThread;
 
 @AnnotatedCommand.Command(keywords = "BlockingPingPongSender", description = "A blocking sender to test ping pong performance using EMX links")
 public class BlockingPingPongSender extends AnnotatedCommand {
     @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&localifaddr=192.168.1.8&localport=12000&tcpnodelay=true")
-    String descriptor;
+    private String _descriptor;
 
-    @Option(shortForm = 's', longForm = "serializedMessageSize", defaultValue = "256", required = true, description = "The size of serialized message")
-    int serializedMessageSize;
+    @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the message to ping pong")
+    private int _messageSize;
 
     @Option(shortForm = 'c', longForm = "count", defaultValue = "10000000", description = "The number of messages to send")
-    long count;
+    private int _testCount;
+
+    @Option(shortForm = 'r', longForm = "rate", defaultValue = "10000", description = "The rate at which to send messages")
+    private int _testRate;
+
+    @Option(shortForm = 'a', longForm = "cpuAffinityMask", description = "which CPU(s) to affinitize the sending thread to")
+    private String _cpuAffinityMask;
+
+    @Option(shortForm = 'o', longForm = "oneWayLatency", description = "whether to calculate one-way latency values")
+    private boolean _oneWay;
+
+    private void doPingPong(final EmxNwLnk link, final ByteBuffer[] writeBuffers, final ByteBuffer readBuffer) throws Exception {
+        writeBuffers[0].clear(); 
+        link.write(writeBuffers, 1);
+        readBuffer.clear();
+        do {
+            link.read();
+        }
+        while (readBuffer.position() < _messageSize);
+        return;
+    }
 
     public void execute() throws Exception {
-        final LatencyManager latencyManager = new LatencyManager("pp", 1000000);
-        final StringBuilder sb = new StringBuilder();
+        // affinitize to CPU
+        if (_cpuAffinityMask != null) {
+            System.out.println("[BlockingPingPongSender] Affinitizing thread to CPU " + _cpuAffinityMask);
+            UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
+        }
+
+        // dump system props
         SystemProperties.dump();
-        final ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(serializedMessageSize)};
-        final ByteBuffer readBuffer = ByteBuffer.allocateDirect(serializedMessageSize);
-        final EmxNwLnkConnector connector = EmxNwLnkConnector.create(descriptor);
+
+        // dump test parameters
+        DecimalFormat dfmt = new DecimalFormat("#,###");
+        System.out.println("[RdmaStreamingSender] Message size:" + _messageSize);
+        System.out.println("[RdmaStreamingSender] Test count:" + dfmt.format(_testCount));
+        System.out.println("[RdmaStreamingSender] Test rate:" + dfmt.format(_testRate));
+        System.out.println("[RdmaStreamingSender] CPU affinity mask:" + _cpuAffinityMask);
+        System.out.println("[RdmaStreamingSender] One way latency:" + _oneWay);
+
+        // establish connection
+        System.out.println("[BlockingPingPongSender] Establishing link...");
+        final EmxNwLnkConnector connector = EmxNwLnkConnector.create(_descriptor);
         final EmxNwLnk link = connector.connect();
+
+        // configure the established link
+        System.out.println("[BlockingPingPongSender] Configuring link (message size=" + _messageSize + ")...");
+        final ByteBuffer readBuffer = ByteBuffer.allocateDirect(_messageSize);
         link.setReadBuffer(IOBuffer.wrap(readBuffer));
         link.configureBlockingRead(true);
         link.configureBlockingWrite(true);
-        final long start = System.currentTimeMillis();
-        int numSent = 0;
-        int deltaNumSent = 0;
-        long deltaStart = start;
-        while (numSent < count) {
-            final long ts = System.nanoTime();
-            writeBuffers[0].clear(); 
-            link.write(writeBuffers, 1);
-            readBuffer.clear();
-            do {
-                link.read();
-            }
-            while (readBuffer.position() < serializedMessageSize);
-            final long latency = System.nanoTime() - ts;
-            latencyManager.add(latency);
-            numSent++; 
-            deltaNumSent++;
-            final long now = System.currentTimeMillis();
-            if (now - deltaStart >= 1000l) {
-                final long deltaRate = (deltaNumSent * 1000l) / (now - deltaStart);
-                final long overallRate = (numSent * 1000l) / (now - start);
-                System.out.println("RATE [" + deltaRate + "," + overallRate + "]");
-                latencyManager.compute();
-                sb.setLength(0);
-                latencyManager.get(sb);
-                System.out.print(sb.toString());
-                deltaStart = now;
-                deltaNumSent = 0;
+
+        // create the message
+        final ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(_messageSize)};
+
+        // calculate nanoTime overhead
+        System.out.println("[BlockingPingPongSender] Calculating UtlTime.now() overhead...");
+        long nanoTimeOverhead = 0l;
+        long start = System.nanoTime();
+        for (int i = 0; i < 100000000l; i++) {
+            System.nanoTime();
+        }
+        nanoTimeOverhead = (System.nanoTime() - start) / 100000000l;
+        System.out.println("[BlockingPingPongSender] ..." + nanoTimeOverhead + "ns");
+
+        // create latency manager
+        final LatencyManager latencyManager = new LatencyManager("pp", 1000000);
+
+        // run test
+        System.out.println("[BlockingPingPongSender] Running test (" + _testCount + " messages)...");
+        int i = 0;
+        long ts1, ts2;
+        final long nanosPerMsg = _testRate > 0 ? (1000000000l / _testRate) : 0;
+        long next = System.nanoTime() + nanosPerMsg;
+        while (i < _testCount) {
+            ts1 = System.nanoTime();
+            if (ts1 >= next) {
+                doPingPong(link, writeBuffers, readBuffer);
+                ts2 = System.nanoTime();
+                int latency = (int)(ts2 - ts1 - nanoTimeOverhead);
+                if (_oneWay) latency /= 2;
+                latencyManager.add(latency);
+                i++;
+                next += nanosPerMsg;
             }
         }
+        System.out.println("[BlockingPingPongSender] Test complete.");
+
+        // close link
         link.close();
+
+        // compute and dump stats
+        final StringBuilder sb = new StringBuilder();
+        latencyManager.compute();
+        sb.setLength(0);
+        latencyManager.get(sb);
+        System.out.print(sb.toString());
     }
 
     public static void main(String args[]) throws Exception {
@@ -91,7 +146,7 @@ public class BlockingPingPongSender extends AnnotatedCommand {
             sender.run(args);
         }
         catch (Exception e) {
-            System.out.println("Received exception during benchmark run - " + e);
+            System.out.println("[BlockingPingPongSender] Received exception during benchmark run - " + e);
         }
     }
 }
