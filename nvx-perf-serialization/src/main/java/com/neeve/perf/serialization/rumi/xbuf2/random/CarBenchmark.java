@@ -30,8 +30,10 @@ import com.neeve.lang.XIterator;
 import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.*;
 import com.neeve.quark.QuarkBuffer;
+import com.neeve.sma.MessageView;
+import com.neeve.util.UtlTime;
 
-public class CarBenchmark implements Provider {
+public class CarBenchmark implements Provider<Car> {
     final private byte[] tempBuffer = new byte[128];
     final private int[] tempIntBuffer = new int[128];
     private static final byte[] MANUFACTURER;
@@ -204,8 +206,24 @@ public class CarBenchmark implements Provider {
     }
 
     @Override
+    public Car create(final boolean encode) {
+        final Car car = Car.create();
+        car.setTimestamp(UtlTime.nowSinceEpoch());
+        if (encode) {
+            encode(car);
+        }
+        return car;
+    }
+
+    @Override
     public void prepareToEncode() {
         encodeCar.clear(false);
+    }
+
+    @Override
+    public void encode(final Car car) {
+        populate(car).sync();
+        encodedLength = encodeCar.getSerializedBufferLength();
     }
 
     @Override
@@ -229,6 +247,11 @@ public class CarBenchmark implements Provider {
     }
 
     @Override
+    public void decode(final Car car) {
+        extract(car);
+    }
+
+    @Override
     public void decode() {
         decodeBuffer.acquire();
         decodeCar.wrap(decodeBuffer, decodeLength);
@@ -242,5 +265,18 @@ public class CarBenchmark implements Provider {
 
     @Override
     public void postDecode() {
+    }
+
+    @Override
+    public long dispose(final MessageView view) {
+        final Car car = (Car)view;
+        try {
+            // note: the act of getting the timestamp will deserialize the entire payload
+            //       if present i.e. of sender was configured to operate with encode=true
+            return car.getTimestamp();
+        }
+        finally { 
+            car.dispose();
+        }
     }
 }

@@ -70,18 +70,21 @@ public class Driver extends AnnotatedCommand {
                           latencyManager.mean());
     }
 
-    @Override
-    public void execute() {
-        Provider provider;
+    final static Provider<?> getProvider(final String providerStr) {
         if (providerStr.equalsIgnoreCase("rumi.xbuf2") || providerStr.equalsIgnoreCase("rumi.xbuf2.serial")) {
-            provider = new com.neeve.perf.serialization.rumi.xbuf2.serial.CarBenchmark();
+            return new com.neeve.perf.serialization.rumi.xbuf2.serial.CarBenchmark();
         }
         else if (providerStr.equalsIgnoreCase("rumi.xbuf2.random")) {
-            provider = new com.neeve.perf.serialization.rumi.xbuf2.random.CarBenchmark();
+            return new com.neeve.perf.serialization.rumi.xbuf2.random.CarBenchmark();
         }
         else {
             throw new IllegalArgumentException("invalid serialization provider '" + providerStr + "'");
         }
+    }
+
+    @Override
+    public void execute() {
+        final Provider provider = getProvider(providerStr);
         final int reps = 10 * 1000 * 1000;
         final LatencyManager latencyManager = new LatencyManager("encdec", reps);
         long nanoTimeOverhead = 0l;

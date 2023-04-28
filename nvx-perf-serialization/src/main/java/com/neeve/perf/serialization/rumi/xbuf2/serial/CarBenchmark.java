@@ -27,16 +27,21 @@ import java.io.UnsupportedEncodingException;
 
 import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.*;
+import com.neeve.sma.MessageView;
 import com.neeve.quark.QuarkBuffer;
 import com.neeve.quark.QuarkStringDeserializer;
+import com.neeve.util.UtlTime;
 
-public class CarBenchmark implements Provider {
+public class CarBenchmark implements Provider<Car> {
     final private static class CarDeserializationCallback implements Car.Deserializer.Callback {
         final private byte[] tempBuffer = new byte[128];
         final private EngineDeserializationCallback engineDeserializationCallback = new EngineDeserializationCallback();
         final private FuelFigureDeserializationCallback fuelFigureDeserializationCallback = new FuelFigureDeserializationCallback();
         final private PerformanceFigureDeserializationCallback performanceFigureDeserializationCallback = new PerformanceFigureDeserializationCallback();
+        long ts;
 
+        @Override
+        public void handleTimestamp(long val) {ts=val;}
         @Override
         public void handleSerialNumber(int val) { }
         @Override
@@ -140,16 +145,14 @@ public class CarBenchmark implements Provider {
         carDecodeLength = serializeTo(carDecodeBuffer);
     }
 
-    final public static int serializeTo(final Car.Serializer carSerializer,
-                                        final Engine.Serializer engineSerializer,
-                                        final PerformanceFigure.Serializer performanceFigureSerializer,
-                                        final FuelFigure.Serializer fuelFigureSerializer,
-                                        final Acceleration.Serializer accelerationSerializer,
-                                        final QuarkBuffer carEncodeBuffer,
-                                        final QuarkBuffer tempBuffer1,
-                                        final QuarkBuffer tempBuffer2) {
-        carSerializer.init(carEncodeBuffer)
-            .serialNumber(12345)
+    final private static int serializeTo(final Car.Serializer carSerializer, // already initialized with serialization buffer
+                                         final Engine.Serializer engineSerializer,
+                                         final PerformanceFigure.Serializer performanceFigureSerializer,
+                                         final FuelFigure.Serializer fuelFigureSerializer,
+                                         final Acceleration.Serializer accelerationSerializer,
+                                         final QuarkBuffer tempBuffer1,
+                                         final QuarkBuffer tempBuffer2) {
+        carSerializer.serialNumber(12345)
             .modelYear((short)2005)
             .available(BooleanType.T)
             .code(Code.A)
@@ -228,7 +231,24 @@ public class CarBenchmark implements Provider {
                .done();
     }
 
-    private int serializeTo(final QuarkBuffer buffer) {
+    final public static int serializeTo(final Car.Serializer carSerializer,
+                                        final Engine.Serializer engineSerializer,
+                                        final PerformanceFigure.Serializer performanceFigureSerializer,
+                                        final FuelFigure.Serializer fuelFigureSerializer,
+                                        final Acceleration.Serializer accelerationSerializer,
+                                        final QuarkBuffer carEncodeBuffer,
+                                        final QuarkBuffer tempBuffer1,
+                                        final QuarkBuffer tempBuffer2) {
+        return serializeTo(carSerializer.init(carEncodeBuffer),
+                           engineSerializer,
+                           performanceFigureSerializer,
+                           fuelFigureSerializer,
+                           accelerationSerializer,
+                           tempBuffer1,
+                           tempBuffer2);
+    }
+
+    final private int serializeTo(final QuarkBuffer buffer) {
         return serializeTo(carSerializer,
                            engineSerializer,
                            performanceFigureSerializer,
@@ -239,8 +259,32 @@ public class CarBenchmark implements Provider {
                            tempBuffer2);
     }
 
+    final private int serializeTo(final Car car) {
+        return serializeTo(car.serializer(1024),
+                           engineSerializer,
+                           performanceFigureSerializer,
+                           fuelFigureSerializer,
+                           accelerationSerializer,
+                           tempBuffer1,
+                           tempBuffer2);
+    }
+
+    final private int serializeTo(final Car.Serializer carSerializer) {
+        return serializeTo(carSerializer,
+                           engineSerializer,
+                           performanceFigureSerializer,
+                           fuelFigureSerializer,
+                           accelerationSerializer,
+                           tempBuffer1,
+                           tempBuffer2);
+    }
+
     final private void deserializeFrom(final QuarkBuffer buffer, final int len) {
         carDeserializer.init(buffer, 0, len).run(cb);
+    }
+
+    final private void deserializeFrom(final Car car) {
+        car.deserializer().run(cb);
     }
 
     @Override
@@ -249,7 +293,23 @@ public class CarBenchmark implements Provider {
     }
 
     @Override
+    public Car create(final boolean encode) {
+        final Car car = Car.create();
+        final Car.Serializer serializer = car.serializer(1024);
+        serializer.timestamp(UtlTime.nowSinceEpoch());
+        if (encode) {
+            carEncodedLength = serializeTo(serializer);
+        }
+        return car;
+    }
+
+    @Override
     public void prepareToEncode() {
+    }
+
+    @Override
+    public void encode(final Car car) {
+        carEncodedLength = serializeTo(car);
     }
 
     @Override
@@ -271,6 +331,11 @@ public class CarBenchmark implements Provider {
     }
 
     @Override
+    public void decode(final Car car) {
+        deserializeFrom(car);
+    }
+
+    @Override
     public void decode() {
         deserializeFrom(carDecodeBuffer, carDecodeLength);
     }
@@ -282,5 +347,20 @@ public class CarBenchmark implements Provider {
 
     @Override
     public void postDecode() {
+    }
+
+    @Override
+    public long dispose(final MessageView view) {
+        final Car car = (Car)view;
+        try {
+            // note: the act of getting the timestamp will deserialize the entire payload
+            //       if present i.e. of sender was configured to operate with encode=true
+            cb.ts = 0l;
+            decode(car);
+            return cb.ts;
+        }
+        finally { 
+            car.dispose();
+        }
     }
 }

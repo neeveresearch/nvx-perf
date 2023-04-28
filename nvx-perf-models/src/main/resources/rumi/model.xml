@@ -48,18 +48,19 @@
 
     <messages>
         <message name="Car" id="5" factoryid="1">
-            <field name="serialNumber" type="Integer" id="1"/>
-            <field name="modelYear" type="Short" id="2"/>
-            <field name="available" type="BooleanType" id="3"/>
-            <field name="code" type="Code" id="4"/>
-            <field name="vehicleCode" type="String" length="6" id="5"/>
-            <field name="someNumbers" type="Integer[]" id="6"/>
-            <field name="extras" type="OptionalExtras[]" id="7"/>
-            <field name="engine" type="Engine" id="8"/>
-            <field name="fuelFigure" type="FuelFigure[]" id="9"/>
-            <field name="performanceFigure" type="PerformanceFigure[]" id="10"/>
-            <field name="manufacturer" type="String" id="11"/>
-            <field name="model" type="String" id="12"/>
+            <field name="timestamp" type="Long" id="1"/>
+            <field name="serialNumber" type="Integer" id="2"/>
+            <field name="modelYear" type="Short" id="3"/>
+            <field name="available" type="BooleanType" id="4"/>
+            <field name="code" type="Code" id="5"/>
+            <field name="vehicleCode" type="String" length="6" id="6"/>
+            <field name="someNumbers" type="Integer[]" id="7"/>
+            <field name="extras" type="OptionalExtras[]" id="8"/>
+            <field name="engine" type="Engine" id="9"/>
+            <field name="fuelFigure" type="FuelFigure[]" id="10"/>
+            <field name="performanceFigure" type="PerformanceFigure[]" id="11"/>
+            <field name="manufacturer" type="String" id="12"/>
+            <field name="model" type="String" id="13"/>
         </message>
     </messages>
 

@@ -23,18 +23,18 @@ package com.neeve.perf.serialization;
 
 import com.neeve.sma.MessageView;
 
-public interface Provider<T extends MessageView> {
-    public String name();
-    public T create(boolean encode);
-    public void prepareToEncode();
-    public void encode(T message);
-    public void encode();
-    public int encodedLength();
-    public void postEncode();
-    public void prepareToDecode();
-    public void decode(T view);
-    public void decode();
-    public int decodedLength();
-    public void postDecode();
-    public long dispose(MessageView car);
+final public class CarFactory {
+    final private Provider<?> provider;
+
+    public CarFactory(final String providerStr) {
+        provider = Driver.getProvider(providerStr);
+    }
+
+    final public MessageView createCar(final boolean encode) {
+        return provider.create(encode);
+    }
+
+    final public long disposeCar(final MessageView view) {
+        return provider.dispose(view);
+    }
 }
