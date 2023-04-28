@@ -33,11 +33,10 @@ import com.lmax.disruptor.MultiThreadedLowContentionClaimStrategy;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.SequenceBarrier;
 
-import com.neeve.adm.AdmEncodingType;
 import com.neeve.ci.XRuntime;
 import com.neeve.event.Event;
 import com.neeve.event.IEventHandler;
-import com.neeve.perf.sma.messages.Message;
+import com.neeve.perf.serialization.CarFactory;
 import com.neeve.sma.MessageChannel;
 import com.neeve.sma.MessageView;
 import com.neeve.sma.SmaException;
@@ -52,61 +51,65 @@ import com.neeve.util.UtlTime;
  */
 @AnnotatedCommand.Command(keywords = "Sender", description = "A sender to benchmark SMA Performance")
 final public class Sender extends Common implements IEventHandler {
-    final private class CarrierEvent {
-        MessageChannel channel;
-        MessageView message;
-
-        CarrierEvent() {
-        }
-
-        final void reset() {
-            channel = null;
-            message = null;
-        }
-    };
-
-    final private class CarrierEventProcessor implements EventHandler<CarrierEvent> {
-        final public void onEvent(final CarrierEvent event,
-                                  final long sequence,
-                                  final boolean endOfBatch) throws Exception {
-            try {
-                event.channel.sendMessage(event.message, null, 0);
-            }
-            catch (Throwable e) {
-                e.printStackTrace();
-            }
-            finally {
-                event.reset();
-            }
-        }
-    };
-
-    final private class SenderThread extends Thread {
-        final long affinity;
-
-        SenderThread(final String name, 
-                     final BatchEventProcessor<CarrierEvent> batchProcessor,
-                     final long affinity) {
-            super(batchProcessor);
-            this.affinity = affinity;
-            setDaemon(true);
-            setName(name);
-        }
-
-        @Override
-        final public void run() {
-            UtlThread.setCPUAffinityMask(affinity);
-            super.run();
-        }
-    }
-
     final private class DetachedSender {
-        final private RingBuffer<CarrierEvent> ringBuffer;
-        final private SenderThread senderThread;
-        final private MessageChannel channel;
-        final private Message message;
+        final private class CarrierEvent {
+            MessageChannel channel;
+            MessageView message;
 
-        DetachedSender(final int id, final MessageChannel channel, final int size) {
+            CarrierEvent() {
+            }
+
+            final void reset() {
+                channel = null;
+                message.dispose();
+                message = null;
+            }
+        };
+
+        final private class CarrierEventProcessor implements EventHandler<CarrierEvent> {
+            final public void onEvent(final CarrierEvent event,
+                                      final long sequence,
+                                      final boolean endOfBatch) throws Exception {
+                try {
+                    Sender.this.sendMessage(event.message, event.channel);
+                }
+                catch (Throwable e) {
+                    e.printStackTrace();
+                }
+                finally {
+                    event.reset();
+                }
+            }
+        };
+
+        final private class SenderThread extends Thread {
+            final private long affinity;
+
+            SenderThread(final String name, 
+                         final BatchEventProcessor<CarrierEvent> batchProcessor,
+                         final long affinity) {
+                super(batchProcessor);
+                this.affinity = affinity;
+                setDaemon(true);
+                setName(name);
+            }
+
+            @Override
+            final public void run() {
+                UtlThread.setCPUAffinityMask(affinity);
+                super.run();
+            }
+        }
+
+        final private int id;
+        final private RingBuffer<CarrierEvent> ringBuffer;
+        final private MessageChannel channel;
+        final private SenderThread senderThread;
+
+        DetachedSender(final int id, final MessageChannel channel) {
+            // store id
+            this.id = id;
+
             // create the disruptor
             ringBuffer = new RingBuffer<CarrierEvent>(new EventFactory<CarrierEvent>() {
                 @Override
@@ -128,13 +131,10 @@ final public class Sender extends Common implements IEventHandler {
 
             // store the channel
             this.channel = channel;
-
-            // create the message
-            this.message = createMessage(size);
         }
 
         final void sendMessage() {
-            message.setTs(UtlTime.now());
+            final MessageView message = carFactory.createCar(populate);
             final long sequence = ringBuffer.next();
             final CarrierEvent carrierEvent = ringBuffer.get(sequence);
             carrierEvent.channel = channel;
@@ -146,35 +146,34 @@ final public class Sender extends Common implements IEventHandler {
     /*
      * Configuration options
      */
-    @Option(shortForm = 'r', longForm = "rate", required = true, defaultValue = "-1", description = "The send rate. If less than 1 then unlimited")
-    private int rate;
     @Option(shortForm = 't', longForm = "senders", required = false, defaultValue = "1", description = "The number of sender threads to use")
     private int numSenders;
+    @Option(shortForm = 'r', longForm = "rate", required = true, defaultValue = "-1", description = "The send rate. If less than 1 then unlimited")
+    private int rate;
     @Option(shortForm = 'i', longForm = "size", required = false, defaultValue = "256", description = "the message data size.")
     private int size;
-    @Option(shortForm = 'e', longForm = "encoding", required = false, defaultValue = "Quark", description = "the message, identified by field count, to use.")
-    private AdmEncodingType encoding;
-    @Option(shortForm = 'p', longForm = "pctpop", required = false, defaultValue = "70", description = "the pecentage of the message to populate.")
-    private int pctpop;
+    @Option(shortForm = 'p', longForm = "populate", defaultValue = "true", description = "populate outbound messages with full content (otherwise only timestamp is sent)")
+    boolean populate;
 
     /*
      * Private scope members
      */
-    final private List<DetachedSender> detachedSenders = new ArrayList<DetachedSender>();
-    final private Random random = new Random(System.currentTimeMillis());
-    private boolean done = false;
+    final private CarFactory carFactory;
+    final private List<DetachedSender> detachedSenders;
+    final private Random random;
+    private boolean done;
 
-    public Sender() {}
-
-    final private Message createMessage(final int size) {
-        final Message message = Message.create();
-        for (int i = 0 ; i <  size ; i++) {
-            message.addData((byte)0);
-        }
-        message.disposePojo(true);
-        return message;
+    public Sender() {
+        carFactory = new CarFactory(encoding);
+        detachedSenders = new ArrayList<DetachedSender>();
+        random = new Random(System.currentTimeMillis());
     }
 
+    final private void sendMessage(final MessageView message, final MessageChannel channel) throws SmaException {
+        channel.sendMessage(message, null, MessageChannel.ALREADY_SYNCD | MessageChannel.KEY_ALREADY_RESOLVED | MessageChannel.KEY_ALREADY_VALIDATED );
+    }
+
+    @Override
     final public void onEvent(final Event event) {}
 
     final public void interrupt(Thread commandThread) {
@@ -193,6 +192,7 @@ final public class Sender extends Common implements IEventHandler {
         System.out.println("  Send Count......." + (count >= 1 ? count : "Unlimited"));
         System.out.println("  Send Rate........" + (rate >= 1 ? "" + rate : "Unlimited"));
         System.out.println("  Send Size........" + size);
+        System.out.println("  Populate........." + populate);
         System.out.println("  Num Senders......" + numSenders);
         System.out.println("  Encoding........." + encoding);
         System.out.println("  Key.............." + channelKey);
@@ -208,7 +208,7 @@ final public class Sender extends Common implements IEventHandler {
         // create detached senders
         if (detachedSend) {
             for (int i = 0 ; i < numSenders ; i++) {
-                detachedSenders.add(new DetachedSender(i+1, channel, size));
+                detachedSenders.add(new DetachedSender(i+1, channel));
             }
         }
 
@@ -221,7 +221,6 @@ final public class Sender extends Common implements IEventHandler {
         int di = 0;
         UtlGovernor throttler = new UtlGovernor(rate);
         count = count < 1 ? Integer.MAX_VALUE : count;
-        final Message msg = detachedSend ? null : createMessage(size);
         while (i < count && !done) {
             throttler.blockToNext();
             final long current = System.currentTimeMillis();
@@ -229,10 +228,14 @@ final public class Sender extends Common implements IEventHandler {
                 detachedSenders.get(random.nextInt(detachedSenders.size())).sendMessage();
             }
             else {
-                msg.setTs(UtlTime.now());
-                channel.sendMessage(msg, null, 0);
+                final MessageView message = carFactory.createCar(populate);
+                try {
+                    sendMessage(message, channel);
+                }
+                finally { 
+                    message.dispose();
+                }
             }
-            // msg.dispose();
             di++;
             i++;
             if (current - istart > 1000) { // every 1 second

@@ -25,7 +25,7 @@ import java.text.NumberFormat;
 
 import com.neeve.ci.XRuntime;
 import com.neeve.event.Event;
-import com.neeve.perf.sma.messages.Message;
+import com.neeve.perf.serialization.CarFactory;
 import com.neeve.sma.MessageLatencyManager;
 import com.neeve.sma.MessageView;
 import com.neeve.sma.event.MessageBusBindingFailedEvent;
@@ -67,25 +67,30 @@ final public class Receiver extends Common {
     /*
      * Private scope members
      */
-    final private Stats stats = new Stats();
+    final private CarFactory carFactory;
+    final private Stats stats;
     private MessageLatencyManager latencyManager;
     private boolean done = false;
 
     /*
      * Constructor
      */
-    public Receiver() {}
+    public Receiver() {
+        carFactory = new CarFactory(encoding);
+        stats = new Stats();
+    }
 
     @Override
     final protected void doRun() throws Exception {
         done = false;
         System.out.println("SMA Streaming Receiver");
-        System.out.println("  Bus............." + busDescriptorString);
-        System.out.println("  Receive Count..." + count);
-        System.out.println("  Key............." + channelKey);
-        System.out.println("  Filter.........." + channelFilter);
-        System.out.println("  Qos............." + qos);
-        System.out.println("  nv.optimizefor..." + (XRuntime.optimizeForThroughput() ? "Throughput" : (XRuntime.optimizeForLatency() ? "Latency" : "None")));
+        System.out.println("  Bus....................." + busDescriptorString);
+        System.out.println("  Encoding................" + encoding);
+        System.out.println("  Receive Count..........." + count);
+        System.out.println("  Key....................." + channelKey);
+        System.out.println("  Filter.................." + channelFilter);
+        System.out.println("  Qos....................." + qos);
+        System.out.println("  nv.optimizefor.........." + (XRuntime.optimizeForThroughput() ? "Throughput" : (XRuntime.optimizeForLatency() ? "Latency" : "None")));
         System.out.println("  nv.optimizeMemoryUsage.." + XRuntime.optimizeMemoryUsage());
         connect(true);
         latencyManager = binding.getLatencyManager();
@@ -182,10 +187,10 @@ final public class Receiver extends Common {
     @Override
     final public void onEvent(final Event event) {
         if (event instanceof MessageEvent) {
-            final Message message = (Message)(((MessageEvent)event).getMessageView());
+            final MessageView message = ((MessageEvent)event).getMessageView();
             processMessage(message.getMessageSequenceNumber(),
-                           message.getTs(),
-                           UtlTime.now());
+                           carFactory.disposeCar(message),
+                           UtlTime.nowSinceEpoch());
             if (MessageLatencyManager.captureMsgLatencyStats && latencyManager != null) latencyManager.update(message, MessageLatencyManager.MessagingDirection.Inbound);
         }
         else if (event instanceof MessageBusBindingFailedEvent) {

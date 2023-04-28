@@ -16,30 +16,19 @@
             <artifactId>nvx-perf-common</artifactId>
             <version>${project.version}</version>
         </dependency>
-    </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>com.neeve</groupId>
-                <artifactId>nvx-adm-maven-plugin</artifactId>
-                <version>${nvx.talon.version}</version>
-                <executions>
-                    <execution>
-                        <id>Messages</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>adm-generate</goal>
-                        </goals>
-                        <configuration>
-                            <modelFile>${basedir}/src/main/models/com/neeve/perf/sma/messages/messages.xml</modelFile>
-                            <encodingType>Xbuf2</encodingType>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-perf-models</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-perf-serialization</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
 
     <profiles>
         <profile>

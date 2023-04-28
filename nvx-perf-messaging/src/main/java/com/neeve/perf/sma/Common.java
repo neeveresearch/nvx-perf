@@ -21,9 +21,6 @@
  */
 package com.neeve.perf.sma;
 
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import com.neeve.config.ConfigRepositoryFactory;
 import com.neeve.event.IEventHandler;
 import com.neeve.sma.MessageBusBinding;
@@ -54,6 +51,9 @@ abstract class Common extends AnnotatedCommand implements IEventHandler {
     @Option(shortForm = 'q', longForm = "qos", defaultValue = "Guaranteed", description = "the delivery QOS")
     MessageChannel.Qos qos;
 
+    @Option(shortForm = 'e', longForm = "encoding", defaultValue = "xbuf2", description = "the encoding type")
+    String encoding;
+
     protected MessageBusBinding binding;
     protected MessageChannel channel;
 
@@ -67,7 +67,7 @@ abstract class Common extends AnnotatedCommand implements IEventHandler {
             final MessageChannelDescriptor channelDescriptor = MessageChannelDescriptor.create("default", busDescriptor);
             busDescriptor.addChannel(channelDescriptor);
             busDescriptor.save(ConfigRepositoryFactory.getInstance().getDefaultRepository(), null);
-            MessageViewFactoryRegistry.getInstance().registerMessageViewFactory(new com.neeve.perf.sma.messages.MessageFactory());
+            MessageViewFactoryRegistry.getInstance().registerMessageViewFactory(new com.neeve.perf.serialization.rumi.xbuf2.CarFactory());
         }
         catch (SmaException e) {
             throw new RuntimeException(e);
