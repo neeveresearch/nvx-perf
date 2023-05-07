@@ -30,6 +30,7 @@ import com.neeve.emx.EmxNwLnk;
 import com.neeve.perf.common.SystemProperties;
 import com.neeve.stats.Stats.LatencyManager;
 import com.neeve.tools.interactive.commands.AnnotatedCommand;
+import com.neeve.util.UtlConstants;
 import com.neeve.util.UtlThread;
 
 @AnnotatedCommand.Command(keywords = "BlockingPingPongSender", description = "A blocking sender to test ping pong performance using EMX links")
@@ -40,10 +41,10 @@ public class BlockingPingPongSender extends AnnotatedCommand {
     @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the message to ping pong")
     private int _messageSize;
 
-    @Option(shortForm = 'c', longForm = "count", defaultValue = "10000000", description = "The number of messages to send")
+    @Option(shortForm = 'c', longForm = "testCount", defaultValue = "150000", description = "The number of messages to send")
     private int _testCount;
 
-    @Option(shortForm = 'r', longForm = "rate", defaultValue = "10000", description = "The rate at which to send messages")
+    @Option(shortForm = 'r', longForm = "testRate", defaultValue = "10000", description = "The rate at which to send messages")
     private int _testRate;
 
     @Option(shortForm = 'a', longForm = "cpuAffinityMask", description = "which CPU(s) to affinitize the sending thread to")
@@ -75,11 +76,11 @@ public class BlockingPingPongSender extends AnnotatedCommand {
 
         // dump test parameters
         DecimalFormat dfmt = new DecimalFormat("#,###");
-        System.out.println("[RdmaStreamingSender] Message size:" + _messageSize);
-        System.out.println("[RdmaStreamingSender] Test count:" + dfmt.format(_testCount));
-        System.out.println("[RdmaStreamingSender] Test rate:" + dfmt.format(_testRate));
-        System.out.println("[RdmaStreamingSender] CPU affinity mask:" + _cpuAffinityMask);
-        System.out.println("[RdmaStreamingSender] One way latency:" + _oneWay);
+        System.out.println("[BlockingStreamingSender] Message size:" + _messageSize);
+        System.out.println("[BlockingStreamingSender] Test count:" + dfmt.format(_testCount));
+        System.out.println("[BlockingStreamingSender] Test rate:" + dfmt.format(_testRate));
+        System.out.println("[BlockingStreamingSender] CPU affinity mask:" + _cpuAffinityMask);
+        System.out.println("[BlockingStreamingSender] One way latency:" + _oneWay);
 
         // establish connection
         System.out.println("[BlockingPingPongSender] Establishing link...");
@@ -97,7 +98,7 @@ public class BlockingPingPongSender extends AnnotatedCommand {
         final ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(_messageSize)};
 
         // calculate nanoTime overhead
-        System.out.println("[BlockingPingPongSender] Calculating UtlTime.now() overhead...");
+        System.out.println("[BlockingPingPongSender] Calculating nanoTime() overhead...");
         long nanoTimeOverhead = 0l;
         long start = System.nanoTime();
         for (int i = 0; i < 100000000l; i++) {
@@ -142,6 +143,7 @@ public class BlockingPingPongSender extends AnnotatedCommand {
 
     public static void main(String args[]) throws Exception {
         try {
+            System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
             BlockingPingPongSender sender = new BlockingPingPongSender();
             sender.run(args);
         }

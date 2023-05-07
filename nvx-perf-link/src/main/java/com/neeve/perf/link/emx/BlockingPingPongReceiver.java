@@ -30,6 +30,8 @@ import com.neeve.emx.EmxNwLnk;
 import com.neeve.io.IOBuffer;
 import com.neeve.perf.common.SystemProperties;
 import com.neeve.tools.interactive.commands.AnnotatedCommand;
+import com.neeve.util.UtlConstants;
+import com.neeve.util.UtlThread;
 
 @AnnotatedCommand.Command(keywords = "BlockingPingPongReceiver", description = "A blocking receiver to test ping pong performance using EMX links")
 public class BlockingPingPongReceiver extends AnnotatedCommand {
@@ -44,7 +46,7 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
     }
 
     final private class ReadCallback implements EmxNwLnkReader.Callback {
-        final private ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(messageSize)};
+        final private ByteBuffer[] writeBuffers = new ByteBuffer[] {ByteBuffer.allocateDirect(_messageSize)};
         private long start;
         private long deltaStart;
         private int numRcvd;
@@ -52,21 +54,21 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
 
         @Override
         final public int handleReadData(final EmxNwLnk link, final IOBuffer iobuf, final int length) {
-            final int count = length / messageSize; 
+            final int count = length / _messageSize; 
             try {
                 if (count > 0) {
                     // process
                     int messageBoundary = 0;
                     for (int i = 0; i < count; i++) {
                         writeBuffers[0].clear();
-                        writeBuffers[0].limit(messageSize);
+                        writeBuffers[0].limit(_messageSize);
                         writeBuffers[0].putLong(0, iobuf.getLong(messageBoundary));
                         link.write(writeBuffers, 1);
-                        messageBoundary += messageSize;
+                        messageBoundary += _messageSize;
                     }
 
                     // stats
-                    if (stats) {
+                    if (_stats) {
                         final long now = System.currentTimeMillis(); 
                         if (start == 0l) {
                             start = deltaStart = now;
@@ -86,7 +88,7 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
             catch (Throwable e) {
                 e.printStackTrace();
             }
-            return messageSize * count; 
+            return _messageSize * count; 
         }
 
         @Override
@@ -100,25 +102,47 @@ public class BlockingPingPongReceiver extends AnnotatedCommand {
         }
     }
 
+    final private class ReaderThread extends Thread {
+        ReaderThread(final EmxNwLnk link) throws Exception {
+            super(EmxNwLnkBlockingReader.create(link, new ReadCallback()));
+        }
+
+        @Override
+        final public void run() {
+            // affinitize to CPU
+            if (_cpuAffinityMask != null) {
+                System.out.println("[BlockingStreamingReceiver] Affinitizing thread to CPU " + _cpuAffinityMask);
+                UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
+            }
+
+            // run
+            super.run();
+        }
+    }
+
     @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&tcpnodelay=true")
-    private String descriptor;
+    private String _descriptor;
 
     @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the the message being ping ponged")
-    private int messageSize;
+    private int _messageSize;
+
+    @Option(shortForm = 'c', longForm = "cpuAffinityMask", description = "the CPU(s) to affinitize the reading thread to")
+    private String _cpuAffinityMask;
 
     @Option(shortForm = 's', longForm = "stats", defaultValue = "false", required = true, description = "Whether to output incremental throughput stats")
-    private boolean stats;
+    private boolean _stats;
 
     public void execute() throws Exception {
         SystemProperties.dump();
-        final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(descriptor, new AcceptCallback());
+        final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(_descriptor, new AcceptCallback());
         final EmxNwLnk link = acceptor.accept();
         link.configureBlockingWrite(true);
-        new Thread(EmxNwLnkBlockingReader.create(link, new ReadCallback())).start();
+        new ReaderThread(link).start();
     }
 
     public static void main(String args[]) throws Exception {
         try {
+            System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
             BlockingPingPongReceiver sender = new BlockingPingPongReceiver();
             sender.run(args);
         }

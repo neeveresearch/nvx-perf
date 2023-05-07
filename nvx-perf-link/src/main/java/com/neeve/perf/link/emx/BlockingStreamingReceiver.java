@@ -26,8 +26,10 @@ import com.neeve.emx.EmxNwLnkReader;
 import com.neeve.emx.EmxNwLnkBlockingReader;
 import com.neeve.emx.EmxNwLnk;
 import com.neeve.io.IOBuffer;
-import com.neeve.tools.interactive.commands.AnnotatedCommand;
 import com.neeve.perf.common.SystemProperties;
+import com.neeve.tools.interactive.commands.AnnotatedCommand;
+import com.neeve.util.UtlConstants;
+import com.neeve.util.UtlThread;
 
 @AnnotatedCommand.Command(keywords = "BlockingStreamingReceiver", description = "A blocking receiver to test streaming performance using EMX links")
 public class BlockingStreamingReceiver extends AnnotatedCommand {
@@ -50,10 +52,10 @@ public class BlockingStreamingReceiver extends AnnotatedCommand {
         @Override
         final public int handleReadData(final EmxNwLnk lnk, final IOBuffer iobuf, final int length) {
             // get count received
-            final int count = length / messageSize;
+            final int count = length / _messageSize;
 
             // stats
-            if (stats) {
+            if (_stats) {
                 final long now = System.currentTimeMillis();
                 if (start == 0l) {
                     start = deltaStart = now;
@@ -70,7 +72,7 @@ public class BlockingStreamingReceiver extends AnnotatedCommand {
             }
 
             // done
-            return messageSize * count; 
+            return _messageSize * count; 
         }
 
         @Override
@@ -84,24 +86,46 @@ public class BlockingStreamingReceiver extends AnnotatedCommand {
         }
     }
 
+    final private class ReaderThread extends Thread {
+        ReaderThread(final EmxNwLnk link) throws Exception {
+            super(EmxNwLnkBlockingReader.create(link, new ReadCallback()));
+        }
+
+        @Override
+        final public void run() {
+            // affinitize to CPU
+            if (_cpuAffinityMask != null) {
+                System.out.println("[BlockingStreamingReceiver] Affinitizing thread to CPU " + _cpuAffinityMask);
+                UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
+            }
+
+            // run
+            super.run();
+        }
+    }
+
     @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&tcpnodelay=true")
-    private String descriptor;
+    private String _descriptor;
 
     @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the messge being streamed")
-    private int messageSize;
+    private int _messageSize;
+
+    @Option(shortForm = 'c', longForm = "cpuAffinityMask", description = "the CPU() to affinitize the reading thread to")
+    private String _cpuAffinityMask;
 
     @Option(shortForm = 's', longForm = "stats", defaultValue = "false", required = true, description = "Whether to output incremental throughput stats")
-    private boolean stats;
+    private boolean _stats;
 
     public void execute() throws Exception {
         SystemProperties.dump();
-        final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(descriptor, new AcceptCallback());
+        final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(_descriptor, new AcceptCallback());
         final EmxNwLnk link = acceptor.accept();
-        new Thread(EmxNwLnkBlockingReader.create(link, new ReadCallback())).start();
+        new ReaderThread(link).start();
     }
 
     public static void main(String args[]) throws Exception {
         try {
+            System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
             BlockingStreamingReceiver sender = new BlockingStreamingReceiver();
             sender.run(args);
         }

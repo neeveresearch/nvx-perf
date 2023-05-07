@@ -26,8 +26,9 @@ import com.neeve.emx.EmxNwLnkReader;
 import com.neeve.emx.EmxNwLnkNonBlockingReader;
 import com.neeve.emx.EmxNwLnk;
 import com.neeve.io.IOBuffer;
-import com.neeve.tools.interactive.commands.AnnotatedCommand;
 import com.neeve.perf.common.SystemProperties;
+import com.neeve.tools.interactive.commands.AnnotatedCommand;
+import com.neeve.util.UtlThread;
 
 @AnnotatedCommand.Command(keywords = "NonBlockingStreamingReceiver", description = "A non-blocking receiver to test streaming performance using EMX links")
 public class NonBlockingStreamingReceiver extends AnnotatedCommand {
@@ -58,10 +59,10 @@ public class NonBlockingStreamingReceiver extends AnnotatedCommand {
         @Override
         final public int handleReadData(final EmxNwLnk lnk, final IOBuffer iobuf, final int length) {
             // get count received
-            final int count = length / messageSize;
+            final int count = length / _messageSize;
 
             // stats
-            if (stats) {
+            if (_stats) {
                 final long now = System.currentTimeMillis();
                 if (start == 0l) {
                     start = deltaStart = now;
@@ -78,7 +79,7 @@ public class NonBlockingStreamingReceiver extends AnnotatedCommand {
             }
 
             // done
-            return messageSize * count; 
+            return _messageSize * count; 
         }
 
         @Override
@@ -92,28 +93,50 @@ public class NonBlockingStreamingReceiver extends AnnotatedCommand {
         }
     }
 
+    final private class ReaderThread extends Thread {
+        ReaderThread() throws Exception {
+            super(reader);
+        }
+
+        @Override
+        final public void run() {
+            // affinitize to CPU
+            if (_cpuAffinityMask != null) {
+                System.out.println("[NonBlockingStreamingReceiver] Affinitizing thread to CPU " + _cpuAffinityMask);
+                UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
+            }
+
+            // run
+            super.run();
+        }
+    }
+
     @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&tcpnodelay=true")
-    private String descriptor;
+    private String _descriptor;
 
     @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the message being streamed")
-    private int messageSize;
+    private int _messageSize;
+
+    @Option(shortForm = 'c', longForm = "cpuAffinityMask", description = "the CPU() to affinitize the reading thread to")
+    private String _cpuAffinityMask;
 
     @Option(shortForm = 's', longForm = "stats", defaultValue = "false", required = true, description = "Whether to output incremental throughput stats")
-    private boolean stats;
+    private boolean _stats;
 
     private EmxNwLnkNonBlockingReader reader;
 
     public void execute() throws Exception {
         SystemProperties.dump();
-        final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(descriptor, new AcceptCallback());
-        new Thread(reader = EmxNwLnkNonBlockingReader.create(new ReadCallback())).start();
+        final EmxNwLnkAcceptor acceptor = EmxNwLnkAcceptor.create(_descriptor, new AcceptCallback());
+        this.reader = EmxNwLnkNonBlockingReader.create(new ReadCallback());
+        new ReaderThread().start();
         new Thread(acceptor).run();
     }
 
     public static void main(String args[]) throws Exception {
         try {
-            NonBlockingStreamingReceiver sender = new NonBlockingStreamingReceiver();
-            sender.run(args);
+            NonBlockingStreamingReceiver receiver = new NonBlockingStreamingReceiver();
+            receiver.run(args);
         }
         catch (Exception e) {
             System.out.println("[NonBlockingStreamingReceiver] Received exception during benchmark run - " + e);
