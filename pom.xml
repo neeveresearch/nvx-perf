@@ -41,6 +41,7 @@
         <module>nvx-perf-serialization</module>
         <module>nvx-perf-link</module>
         <module>nvx-perf-messaging</module>
+        <module>nvx-perf-storage</module>
     </modules>
 
     <dependencies>
