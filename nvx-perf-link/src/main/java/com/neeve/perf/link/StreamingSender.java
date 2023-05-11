@@ -21,6 +21,8 @@
  */
 package com.neeve.perf.link;
 
+import java.text.DecimalFormat;
+
 import com.neeve.emx.EmxFactory;
 import com.neeve.emx.IEmxDispatcher;
 import com.neeve.link.ILnkClientEndpoint;
@@ -30,199 +32,184 @@ import com.neeve.link.ILnkPeerEndpoint;
 import com.neeve.link.LnkEvents;
 import com.neeve.link.LnkFactory;
 import com.neeve.link.LnkSender;
+import com.neeve.perf.common.LatencyWriter;
+import com.neeve.perf.common.SystemProperties;
+import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
+import com.neeve.pkt.types.PktBodyData;
+import com.neeve.pkt.types.PktBodyTypesBase;
 import com.neeve.tools.interactive.commands.AnnotatedCommand;
+import com.neeve.util.UtlConstants;
+import com.neeve.util.UtlThread;
 
-/**
- * Sender in the link performance test package.
- */
-@AnnotatedCommand.Command(keywords = "StreamingLinkSender", description = "Starts a client for testing streaming network performance")
-final public class StreamingSender extends Common {
-    /*
-     * Connect complete event handler
-     */
+@AnnotatedCommand.Command(keywords = "StreamingLinkSender", description = "A sender for testing streaming performance")
+final public class StreamingSender extends AnnotatedCommand {
     final private class ConnectCompleteEventHandler implements ILnkEventHandler {
         LnkEvents.ConnectAcceptCompleteEventData eventData;
 
-        /**
-         * Implementation of {@link ILnkEventHandler#onEvent}
-         */
-        final public void onEvent(final IEmxDispatcher dispatcher,
-                                  final ILnkEndpoint ep,
-                                  final int event,
-                                  final Object data) {
+        @Override
+        final public void onEvent(final IEmxDispatcher dispatcher, final ILnkEndpoint ep, final int event, final Object data) {
             this.eventData = (LnkEvents.ConnectAcceptCompleteEventData)data;
         }
     }
 
-    /*
-     * Link event handler
-     */
     final private class EventHandler implements ILnkEventHandler {
-        /**
-         * Implementation of {@link ILnkEventHandler#onEvent}
-         */
-        final public void onEvent(final IEmxDispatcher dispatcher,
-                                  final ILnkEndpoint ep,
-                                  final int event,
-                                  final Object data) {
-            if (event == LnkEvents.EVENT_FAILURE) {
-                System.out.println("Link (" + ep.toString() + ") failure [" + ((Exception)data).toString() + "]");
-            }
-            else {
-                throw new InternalError("Received event [type=" + event + " data=" + data + "] through performance sender event handler!");
+        @Override
+        final public void onEvent(final IEmxDispatcher dispatcher, final ILnkEndpoint ep, final int event, final Object data) {
+            switch (event) {
+                case LnkEvents.EVENT_FAILURE:
+                    System.out.println("[StreamingSender] Link (" + ep.toString() + ") failure [" + ((Exception)data).toString() + "]");
+                    break;
+
+                default:
+                    throw new InternalError("Received event [type=" + event + " data=" + data + "]!");
+
             }
         }
     }
 
-    /*
-     * Private members
-     */
-    @RemainingArgs(name = "descriptors", required = true, description = "A space separated set of sender descriptors to create")
-    String[] descs;
-    private IEmxDispatcher dispatcher;
-    private ILnkPeerEndpoint[] peps;
-    private LnkSender[] senders;
+    @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "The connection descriptor to use e.g. tcp://192.168.1.7:12000&tcpnodelay=true")
+    private String _descriptor;
 
-    /** 
-     * Constructor
-     */
-    public StreamingSender() throws Exception {
-        super();
-    }
+    @Option(shortForm = 'm', longForm = "messageSize", defaultValue = "256", required = true, description = "The size of the message to stream")
+    private int _messageSize;
 
-    final private boolean connect() {
-        /*
-         * Connect each of the links.
-         */
-        for (int i = 0; i < descs.length; i++) {
-            /*
-             * Get next link descriptor 
-             */
-            final String desc = descs[i];
+    @Option(shortForm = 'a', longForm = "flushAfter", defaultValue = "64", description = "Flush after how many messages")
+    private int _flushAfter;
 
-            /*
-             * Create the client endpoint
-             */
-            ILnkClientEndpoint cep;
-            try {
-                cep = LnkFactory.getInstance().createClientEndpoint(desc, null);
-            }
-            catch (Exception e) {
-                System.out.println("Connect failure: Failed to create client endpoint [error=" + e.toString() + "].");
-                return false;
-            }
+    @Option(shortForm = 't', longForm = "testCount", defaultValue = "100000000", description = "The test count")
+    private int _testCount;
 
-            /*
-             * Connect
-             */
-            System.out.println("Connecting [desc=" + desc + "]...");
-            final ConnectCompleteEventHandler connectCompleteHandler = new ConnectCompleteEventHandler();
-            try {
-                cep.connectPost(dispatcher, connectCompleteHandler, -1, 0);
-                while (connectCompleteHandler.eventData == null) {
-                    dispatcher.run(-1);
-                }
-                if (connectCompleteHandler.eventData.status) {
-                    System.out.println("Connect success.");
-                    peps[i] = connectCompleteHandler.eventData.pep;
-                }
-                else {
-                    throw connectCompleteHandler.eventData.e;
-                }
-            }
-            catch (Exception e) {
-                System.out.println("Connect failure [" + e.toString() + "].");
-                try {
-                    cep.close();
-                }
-                catch (Exception e1) {}
-                return false;
-            }
+    @Option(shortForm = 'r', longForm = "testRate", defaultValue = "10000000", description = "The send rate")
+    private int _testRate;
 
-            /*
-             * Join
-             */
-            System.out.println("Joining...");
-            try {
-                peps[i].join((short)-1, new EventHandler());
-            }
-            catch (Exception e) {
-                System.out.println("Join failure [" + e.toString() + "].");
-                try {
-                    peps[i].close((short)-1);
-                }
-                catch (Exception e1) {}
-                return false;
-            }
+    @Option(shortForm = 'w', longForm = "warmupTime", defaultValue = "2", description = "The warm up time, in seconds")
+    private int _warmupTime;
 
-            /*
-             * Create/open senders
-             */
-            System.out.println("Creating senders...");
-            try {
-                (senders[i] = LnkSender.create(peps[i])).open();
-            }
-            catch (Exception e) {
-                System.out.println("Sender create/open failure [" + e.toString() + "].");
-                try {
-                    peps[i].close((short)-1);
-                }
-                catch (Exception e1) {}
-                return false;
-            }
+    @Option(shortForm = 'c', longForm = "cpuAffinityMask", description = "which CPU(s) to affinitize the sending thread to")
+    private String _cpuAffinityMask;
+
+    @Option(shortForm = 'i', longForm = "printIntervalStats", description = "whether to output stats at periodic intervals instead of only at the end")
+    private boolean _printIntervalStats;
+
+    @Option(shortForm = 'f', longForm = "dontWriteLatenciesToFile", description = "whether to suppress writing latency values to a file")
+    private boolean _dontWriteLatenciesToFile;
+
+    final private ILnkPeerEndpoint connect(final IEmxDispatcher dispatcher) throws Exception {
+        // create connector
+        final ILnkClientEndpoint cep = LnkFactory.getInstance().createClientEndpoint(_descriptor, null);
+
+        // connect
+        System.out.println("[StreamingSender] Connecting to " + _descriptor + "]...");
+        final ConnectCompleteEventHandler connectCompleteHandler = new ConnectCompleteEventHandler();
+        cep.connectPost(dispatcher, connectCompleteHandler, -1, 0);
+        while (connectCompleteHandler.eventData == null) {
+            dispatcher.run(-1);
         }
-        return true;
-    }
-
-    final private void send() {
-
-        try {
-            System.out.println("Sending packets...");
-            final long start = System.nanoTime();
-            final long nanosPerPacket = rate > 0 ? (1000000000l / rate) : 0;
-            long next = start + nanosPerPacket;
-            if (count <= 0) count = Long.MAX_VALUE;
-            for (int j = 0 ; j < count ; j++) {
-                final long current = System.nanoTime();
-                if (current >= next) {
-                    try {
-                        for (int i = 0; i < peps.length; i++) {
-                            final PktPacket packet = packetManager.getPacketForSend();
-                            senders[i].sendStreaming(prepHeaders(packet), null, 0);
-                            packet.dispose();
-                        }
-                    }
-                    catch (Exception e) {
-                        System.out.println("Send failure [" + e.toString() + "].");
-                        e.printStackTrace();
-                        break;
-                    }
-                    next += nanosPerPacket;
-                }
-            }
+        if (connectCompleteHandler.eventData.status) {
+            System.out.println("[StreamingSender] Connect success.");
+            return connectCompleteHandler.eventData.pep;
         }
-        finally {
-            try {
-                for (int i = 0; i < peps.length; i++) {
-                    peps[i].close((short)-1);
-                }
-            }
-            catch (Exception e1) {}
+        else {
+            throw connectCompleteHandler.eventData.e;
         }
     }
 
     @Override
-    final public void doRun() throws Exception {
-        this.dispatcher = EmxFactory.getInstance().createDispatcher(EmxFactory.EmxImpl.DEFAULT, "LinkPerfSenderDispatcher", null);
-        this.peps = new ILnkPeerEndpoint[descs.length];
-        this.senders = new LnkSender[descs.length];
-        if (connect()) {
-            send();
+    public void execute() throws Exception {
+        // affinitize to CPU
+        if (_cpuAffinityMask != null) {
+            System.out.println("[StreamingSender] Affinitizing thread to CPU " + _cpuAffinityMask);
+            UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
+        }
+
+        // dump system props
+        SystemProperties.dump();
+
+        // dump test parameters
+        DecimalFormat dfmt = new DecimalFormat("#,###");
+        System.out.println("[StreamingSender] Descriptor:" + _descriptor);
+        System.out.println("[StreamingSender] Message size:" + _messageSize);
+        System.out.println("[StreamingSender] Test count:" + dfmt.format(_testCount));
+        System.out.println("[StreamingSender] Warmup time:" + _warmupTime + "s");
+        System.out.println("[StreamingSender] Test rate:" + dfmt.format(_testRate));
+        System.out.println("[StreamingSender] CPU affinity mask:" + _cpuAffinityMask);
+        System.out.println("[StreamingSender] Print interval stats:" + _printIntervalStats);
+        System.out.println("[StreamingSender] Write latencies to file:" + !_dontWriteLatenciesToFile);
+
+        // create dispatcher
+        final IEmxDispatcher dispatcher = EmxFactory.getInstance().createDispatcher(EmxFactory.EmxImpl.DEFAULT, "StreamingReceiverDispatcher", null);
+
+        // establish connection
+        final ILnkPeerEndpoint pep = connect(dispatcher);
+        pep.join((short)-1, new EventHandler());
+
+        // calculate nanoTime() overhead
+        System.out.println("[StreamingSender] Calculating nanoTime() overhead...");
+        long nanoTimeOverhead = 0l;
+        long start = System.nanoTime();
+        for (int i = 0; i < 100000000l; i++) {
+            System.nanoTime();
+        }
+        nanoTimeOverhead = (System.nanoTime() - start) / 100000000l;
+        System.out.println("[StreamingSender] ..." + nanoTimeOverhead + "ns");
+
+        // create latency writer
+        final LatencyWriter lw = new LatencyWriter("nw-write", _dontWriteLatenciesToFile ? null : "latencies.write.bin", _printIntervalStats);
+
+        // create the packet to send
+        final PktPacket packet = PktFactory.getInstance().createPacket(PktBodyTypesBase.DATA);
+        ((PktBodyData)packet.getBody()).setBufferLength(_messageSize);
+
+        // warm up
+        System.out.println("[StreamingSender] Warming up (" + _warmupTime + " seconds)...");
+        final long warmupStart = System.currentTimeMillis();
+        while ((System.currentTimeMillis() - warmupStart) < (_warmupTime * 1000l)) {
+            pep.enque((short)-1, packet, null, 0);
+        }
+        pep.flush((short)-1, null);
+
+        // run test
+        int numSent = 0;
+        long ts1, ts2;
+        final long nanosPerMsg = _testRate > 0 ? (1000000000l / _testRate) : 0;
+        System.out.println("[StreamingSender] Running test (" + dfmt.format(_testCount) + " messages @ " + _testRate + " msgs/sec)...");
+        long next = System.nanoTime() + nanosPerMsg;
+        lw.start(_testRate, _testCount);
+        start = System.currentTimeMillis();
+        while (numSent < _testCount) {
+            ts1 = System.nanoTime();
+            if (ts1 >= next) {
+                pep.enque((short)-1, packet, null, 0);
+                numSent++;
+                if (numSent % _flushAfter == 0) {
+                    pep.flush((short)-1, null);
+                }
+                ts2 = System.nanoTime();
+                final int writeTime = (int)(ts2 - ts1 - nanoTimeOverhead);
+                lw.write(writeTime);
+                next += nanosPerMsg;
+            }
+        }
+        final long stop = System.currentTimeMillis();
+        lw.stop();
+
+        // close link
+        pep.close((short)-1);
+
+        // stats
+        final long overallRate = (numSent * 1000l) / (stop - start);
+        System.out.println("[StreamingSender] Sent " + dfmt.format(numSent) + " messages at " + dfmt.format(overallRate) + " msgs/sec.");
+        if (!_dontWriteLatenciesToFile) {
+            System.out.println("[StreamingSender] Test complete (run rumi-reporter on latencies.write.bin to calculate latency stats).");
+        }
+        else {
+            System.out.println("[StreamingSender] Test complete.");
         }
     }
 
     public static void main(String args[]) throws Exception {
+        System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
         new StreamingSender().run(args);
     }
 }

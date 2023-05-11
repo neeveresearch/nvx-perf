@@ -84,6 +84,7 @@ final public class LatencyWriter {
         }
     }
 
+    final private String _name;
     final private String _filename;
     final private boolean _printHeader;
     final private boolean _printIntervalStats;
@@ -97,6 +98,8 @@ final public class LatencyWriter {
     /**
      * Construct a latency writer 
      *  
+     * @param name The name of the stats series 
+     *  
      * @param filename The file to write the latencies to. Can be null if latencies are not to be written 
      *  
      * @param printHeader Whether the latencies header should be printed. This should normally be true unless 
@@ -109,10 +112,12 @@ final public class LatencyWriter {
      * are printed in microseconds. This parameter does not affect what is written to the latencies file. 
      * That is always in nanoseconds i.e. what is supplied to {@link #write(int)} 
      */
-    public LatencyWriter(final String filename, 
-                              final boolean printHeader, 
-                              final boolean printIntervalStats,
-                              final boolean printStatsInNanos) throws Exception {
+    public LatencyWriter(final String name,
+                         final String filename,
+                         final boolean printHeader,
+                         final boolean printIntervalStats,
+                         final boolean printStatsInNanos) throws Exception {
+        _name = name;
         _filename = filename;
         _printHeader = printHeader;
         _printIntervalStats = printIntervalStats;
@@ -124,20 +129,20 @@ final public class LatencyWriter {
      * Construct a latency writer 
      *  
      * <p> 
-     * Invokes <code>this(filename, true, printIntervalStats, false)</code>
+     * Invokes <code>this(name, filename, true, printIntervalStats, false)</code>
      */
-    public LatencyWriter(final String filename, final boolean printIntervalStats) throws Exception {
-        this(filename, true, printIntervalStats, false);
+    public LatencyWriter(final String name, final String filename, final boolean printIntervalStats) throws Exception {
+        this(name, filename, true, printIntervalStats, false);
     }
 
     final private static int val(long arr, int idx) {
-        return QuarkBuffer.getInt(arr, idx*4);
+        return QuarkBuffer.getInt(arr, idx * 4);
     }
 
     final private static void swap(long arr, int a, int b) {
         int t = val(arr, a);
-        QuarkBuffer.putInt(arr, a*4, val(arr, b));
-        QuarkBuffer.putInt(arr, b*4, t);
+        QuarkBuffer.putInt(arr, a * 4, val(arr, b));
+        QuarkBuffer.putInt(arr, b * 4, t);
     }
 
     /*
@@ -148,13 +153,13 @@ final public class LatencyWriter {
      *  Cambridge University Press, 1992, Section 8.5, ISBN 0-521-43108-5
      *  This code by Nicolas Devillard - 1998. Public domain.
      */
-    final private static int percentile(long arr , int n, double rank) {
+    final private static int percentile(long arr, int n, double rank) {
         int low, high;
         int percentile_idx;
         int middle, ll, hh;
 
-        low = 0; 
-        high = n - 1; 
+        low = 0;
+        high = n - 1;
         percentile_idx = (int)(high * (rank / 100.0));
 
         for (;;) {
@@ -205,52 +210,54 @@ final public class LatencyWriter {
 
     final private void printHeader() {
         System.out.println("");
-        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+        System.out.println("+------------------------------------------------------------------------------------------------------------------------------------------+");
         if (_printStatsInNanos) {
-            System.out.println("|              |                                          latency (nsec)                                                        |");
+            System.out.println("|          |              |                                          latency (nsec)                                                        |");
         }
         else {
-            System.out.println("|              |                                          latency (usec)                                                        |");
+            System.out.println("|          |              |                                          latency (usec)                                                        |");
         }
-        System.out.println("+--------------+--------+--------+--------+--------+----------+-----------+------------+-------------+--------+--------+--------+");
-        System.out.println("| # iterations | 50%ile | 75%ile | 90%ile | 99%ile | 99.9%ile | 99.99%ile | 99.999%ile | 99.9999%ile |   max  | avg(d) | avg(o) |");
-        System.out.println("+--------------+--------+--------+--------+--------+----------+-----------+------------+-------------+--------+--------+--------+");
+        System.out.println("+----------+--------------+--------+--------+--------+--------+----------+-----------+------------+-------------+--------+--------+--------+");
+        System.out.println("|  metric  | # iterations | 50%ile | 75%ile | 90%ile | 99%ile | 99.9%ile | 99.99%ile | 99.999%ile | 99.9999%ile |   max  | avg(d) | avg(o) |");
+        System.out.println("+----------+--------------+--------+--------+--------+--------+----------+-----------+------------+-------------+--------+--------+--------+");
     }
 
     final private void printSeparator() {
-        System.out.println("+-------------------------------------------------------------------------------------------------------------------------------+");
+        System.out.println("+------------------------------------------------------------------------------------------------------------------------------------------+");
     }
 
     final private void printLatencies(final long latencies, final long itotal, final long total, final int icount, final int count, final int max) {
         if (_printStatsInNanos) {
-            System.out.format(" %14d %8d %8d %8d %8d %10d %11d %12d %13d %8d %8.2f %8.2f\n", 
-                               icount, 
-                               percentile(latencies, icount, 50.0), 
-                               percentile(latencies, icount, 75.0), 
-                               percentile(latencies, icount, 90.0), 
-                               percentile(latencies, icount, 99.0), 
-                               percentile(latencies, icount, 99.9), 
-                               percentile(latencies, icount, 99.99), 
-                               percentile(latencies, icount, 99.999), 
-                               percentile(latencies, icount, 99.9999),
-                               max, 
-                               ((double)itotal)/icount, 
-                               ((double)total)/count);
+            System.out.format(" %10s %14d %8d %8d %8d %8d %10d %11d %12d %13d %8d %8.2f %8.2f\n",
+                              _name,
+                              icount,
+                              percentile(latencies, icount, 50.0),
+                              percentile(latencies, icount, 75.0),
+                              percentile(latencies, icount, 90.0),
+                              percentile(latencies, icount, 99.0),
+                              percentile(latencies, icount, 99.9),
+                              percentile(latencies, icount, 99.99),
+                              percentile(latencies, icount, 99.999),
+                              percentile(latencies, icount, 99.9999),
+                              max,
+                              ((double)itotal) / icount,
+                              ((double)total) / count);
         }
         else {
-            System.out.format(" %14d %8.2f %8.2f %8.2f %8.2f %10.2f %11.2f %12.2f %13.2f %8.2f %8.2f %8.2f\n", 
-                               icount, 
-                               ((double)percentile(latencies, icount, 50.0)) / 1000, 
-                               ((double)percentile(latencies, icount, 75.0)) / 1000, 
-                               ((double)percentile(latencies, icount, 90.0)) / 1000, 
-                               ((double)percentile(latencies, icount, 99.0)) / 1000, 
-                               ((double)percentile(latencies, icount, 99.9)) / 1000, 
-                               ((double)percentile(latencies, icount, 99.99)) / 1000, 
-                               ((double)percentile(latencies, icount, 99.999)) / 1000, 
-                               ((double)percentile(latencies, icount, 99.9999)) / 1000,
-                               ((double)max) / 1000, 
-                               ((double)itotal)/icount, 
-                               ((double)total)/count);
+            System.out.format(" %10s %14d %8.2f %8.2f %8.2f %8.2f %10.2f %11.2f %12.2f %13.2f %8.2f %8.2f %8.2f\n",
+                              _name,
+                              icount,
+                              ((double)percentile(latencies, icount, 50.0)) / 1000,
+                              ((double)percentile(latencies, icount, 75.0)) / 1000,
+                              ((double)percentile(latencies, icount, 90.0)) / 1000,
+                              ((double)percentile(latencies, icount, 99.0)) / 1000,
+                              ((double)percentile(latencies, icount, 99.9)) / 1000,
+                              ((double)percentile(latencies, icount, 99.99)) / 1000,
+                              ((double)percentile(latencies, icount, 99.999)) / 1000,
+                              ((double)percentile(latencies, icount, 99.9999)) / 1000,
+                              ((double)max) / 1000,
+                              (((double)itotal) / icount) / 1000,
+                              (((double)total) / count) / 1000);
         }
     }
 
@@ -267,7 +274,7 @@ final public class LatencyWriter {
                         final DataInputStream dis = new DataInputStream(bis);
                         int max = 0;
                         long total = 0;
-                        for (int i = 0 ; i < _counters.count ; i++) {
+                        for (int i = 0; i < _counters.count; i++) {
                             final int latency = dis.readInt();
                             QuarkBuffer.putInt(latencies, i * 4, latency);
                             total += latency;
@@ -275,19 +282,19 @@ final public class LatencyWriter {
                         }
                         printLatencies(latencies, total, total, _counters.count, _counters.count, max);
                     }
-                    finally { 
+                    finally {
                         bis.close();
                     }
                 }
                 finally {
-                    fis.close(); 
+                    fis.close();
                 }
             }
             catch (Throwable e) {
                 e.printStackTrace();
             }
         }
-        finally { 
+        finally {
             QuarkBuffer.freeMemoryBlock(latencies, _counters.count * 4);
         }
     }
@@ -314,14 +321,14 @@ final public class LatencyWriter {
 
         // write to file if configured to do so
         if (_mappedFile != null) {
-            for (int i = 0 ; i < icount ; i++) {
-                QuarkBuffer.putInt(latencies, i*4, Integer.reverseBytes(QuarkBuffer.getInt(latencies, i*4)));
+            for (int i = 0; i < icount; i++) {
+                QuarkBuffer.putInt(latencies, i * 4, Integer.reverseBytes(QuarkBuffer.getInt(latencies, i * 4)));
             }
-            QuarkBuffer.copy(latencies, 
-                          0, 
-                          _mappedFile.getNativeAddress(), 
-                          (count - icount) * 4, 
-                          icount * 4);
+            QuarkBuffer.copy(latencies,
+                             0,
+                             _mappedFile.getNativeAddress(),
+                             (count - icount) * 4,
+                             icount * 4);
         }
     }
 
@@ -401,7 +408,7 @@ final public class LatencyWriter {
                 // yes, if print header is configured, then print header/separator
                 if (_printHeader) {
                     // print header if interval stats are not enabled i.e. the header was
-                    // not printed at start. otherwise, print just the separator to separate 
+                    // not printed at start. otherwise, print just the separator to separate
                     // the interval latencies for the full run
                     if (!_printIntervalStats) {
                         printHeader();
@@ -429,7 +436,7 @@ final public class LatencyWriter {
             _counters.done();
         }
         finally {
-            _started = false; 
+            _started = false;
         }
     }
 }

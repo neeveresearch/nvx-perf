@@ -31,13 +31,16 @@ import com.neeve.link.ILnkServerEndpoint;
 import com.neeve.link.LnkEvents;
 import com.neeve.link.LnkFactory;
 import com.neeve.perf.common.SystemProperties;
+import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
+import com.neeve.pkt.types.PktBodyData;
+import com.neeve.pkt.types.PktBodyTypesBase;
 import com.neeve.tools.interactive.commands.AnnotatedCommand;
 import com.neeve.util.UtlConstants;
 import com.neeve.util.UtlThread;
 
-@AnnotatedCommand.Command(keywords = "StreamingReceiver", description = "A receiver for testing streaming performance")
-final public class StreamingReceiver extends AnnotatedCommand {
+@AnnotatedCommand.Command(keywords = "PingPongReceiver", description = "A receiver for testing streaming performance")
+final public class PingPongReceiver extends AnnotatedCommand {
     final private class AcceptCompleteEventHandler implements ILnkEventHandler {
         LnkEvents.ConnectAcceptCompleteEventData eventData;
 
@@ -48,16 +51,55 @@ final public class StreamingReceiver extends AnnotatedCommand {
     }
 
     final private class EventHandler implements ILnkEventHandler {
+        final private PktPacket sendPacket;
+        private long start;
+        private long deltaStart;
+        private int numRcvd;
+        private int deltaNumRcvd;
+
+        EventHandler() {
+            sendPacket = PktFactory.getInstance().createPacket(PktBodyTypesBase.DATA);
+            ((PktBodyData)sendPacket.getBody()).setBufferLength(8);
+        }
+
         @Override
         final public void onEvent(final IEmxDispatcher dispatcher, final ILnkEndpoint ep, final int event, final Object data) {
             switch (event) {
                 case LnkEvents.EVENT_PACKET:
-                    ((PktPacket)data).dispose();
+                    // process
+                    try {
+                        final PktPacket receivedPacket = ((PktPacket)data);
+                        final long ts = receivedPacket.getBody().getBuffer().getLong(0);
+                        sendPacket.getBody().getBuffer().putLong(0, ts);
+                        receivedPacket.dispose();
+                        ((ILnkPeerEndpoint)ep).enque((short)-1, sendPacket, null, ILnkPeerEndpoint.IOFLAG_FLUSH_FORCE);
+                    }
+                    catch (Throwable e) {
+                        e.printStackTrace();
+                        _done = true;
+                    }
+
+                    // stats
+                    if (!_done && _stats) {
+                        final long now = System.currentTimeMillis(); 
+                        if (start == 0l) {
+                            start = deltaStart = now;
+                        }
+                        numRcvd++;
+                        deltaNumRcvd++;
+                        if (now - deltaStart >= 1000l) {
+                            final long deltaRate = (deltaNumRcvd * 1000l) / (now - deltaStart);
+                            final long overallRate = (numRcvd * 1000l) / (now - start);
+                            System.out.println("[PingPongReceiver] RATE [" + deltaRate + "," + overallRate + "]");
+                            deltaStart = now;
+                            deltaNumRcvd = 0;
+                        }
+                    }
                     break;
 
                 case LnkEvents.EVENT_FAILURE:
-                    System.out.println("[StreamingReceiver] Failure [" + ((Exception)data).toString() + "]");
-                    done = true;
+                    System.out.println("[PingPongReceiver] Failure [" + ((Exception)data).toString() + "]");
+                    _done = true;
                     break;
 
                 default:
@@ -73,7 +115,10 @@ final public class StreamingReceiver extends AnnotatedCommand {
     @Option(shortForm = 'c', longForm = "cpuAffinityMask", description = "the CPU() to affinitize the reading thread to")
     private String _cpuAffinityMask;
 
-    private boolean done;
+    @Option(shortForm = 's', longForm = "stats", defaultValue = "false", required = true, description = "Whether to output incremental throughput stats")
+    private boolean _stats;
+
+    private boolean _done;
 
     final private ILnkPeerEndpoint accept(final IEmxDispatcher dispatcher) throws Exception {
         // create acceptor
@@ -81,14 +126,14 @@ final public class StreamingReceiver extends AnnotatedCommand {
 
         // block and wait for inbound connection
         try {
-            System.out.println("[StreamingReceiver] Accepting [_descriptor=" + _descriptor + "]...");
+            System.out.println("[PingPongReceiver] Accepting [_descriptor=" + _descriptor + "]...");
             final AcceptCompleteEventHandler acceptCompleteHandler = new AcceptCompleteEventHandler();
             sep.acceptPost(dispatcher, acceptCompleteHandler, -1, 0);
             while (acceptCompleteHandler.eventData == null) {
                 dispatcher.run(-1);
             }
             if (acceptCompleteHandler.eventData.status) {
-                System.out.println("[StreamingReceiver] Accept success.");
+                System.out.println("[PingPongReceiver] Accept success.");
                 return acceptCompleteHandler.eventData.pep;
             }
             else {
@@ -106,9 +151,9 @@ final public class StreamingReceiver extends AnnotatedCommand {
             pep.join((short)-1, new EventHandler());
 
             // receive
-            System.out.println("[StreamingReceiver] Receiving packets...");
+            System.out.println("[PingPongReceiver] Receiving packets...");
             ((ILnkSTRRootEndpoint)pep.getRootEndpoint()).startRead(dispatcher, 0);
-            while (!done) {
+            while (!_done) {
                 dispatcher.run(-1);
             }
         }
@@ -121,7 +166,7 @@ final public class StreamingReceiver extends AnnotatedCommand {
     public void execute() throws Exception {
         // affinitize to CPU
         if (_cpuAffinityMask != null) {
-            System.out.println("[StreamingReceiver] Affinitizing thread to CPU " + _cpuAffinityMask);
+            System.out.println("[PingPongReceiver] Affinitizing thread to CPU " + _cpuAffinityMask);
             UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
         }
 
@@ -129,7 +174,7 @@ final public class StreamingReceiver extends AnnotatedCommand {
         SystemProperties.dump();
 
         // create dispatcher
-        final IEmxDispatcher dispatcher = EmxFactory.getInstance().createDispatcher(EmxFactory.EmxImpl.DEFAULT, "StreamingReceiverDispatcher", null);
+        final IEmxDispatcher dispatcher = EmxFactory.getInstance().createDispatcher(EmxFactory.EmxImpl.DEFAULT, "PingPongReceiverDispatcher", null);
 
         // accept connection
         final ILnkPeerEndpoint pep = accept(dispatcher);
@@ -140,6 +185,6 @@ final public class StreamingReceiver extends AnnotatedCommand {
 
     public static void main(String args[]) throws Exception {
         System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
-        new StreamingReceiver().run(args);
+        new PingPongReceiver().run(args);
     }
 }
