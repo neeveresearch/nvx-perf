@@ -28,7 +28,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Properties;
 
-import com.neeve.config.Config;
+import com.neeve.ci.XRuntime;
 import com.neeve.event.Event;
 import com.neeve.event.EventFactory;
 import com.neeve.event.EventMultiplexerSingleThreaded;
@@ -48,7 +48,7 @@ final public class Driver extends AnnotatedCommand {
         @Override
         final public void onEvent(final Event event) {
             final TestEvent testEvent = ((TestEvent)event);
-            final int latency = (int)(UtlTime.now() - testEvent.offerTs);
+            final int latency = (int)(System.nanoTime() - testEvent.offerTs);
             latencies[testEvent.num - 1] = latency;
             if (testEvent.num == Driver.this.count) {
                 System.out.println("Writing o2p times...");
@@ -68,7 +68,7 @@ final public class Driver extends AnnotatedCommand {
 
         final TestEvent init(final int num) {
             super.init(null, null);
-            offerTs = UtlTime.now();
+            offerTs = System.nanoTime();
             this.num = num;
             return this;
         }
@@ -133,18 +133,18 @@ final public class Driver extends AnnotatedCommand {
         // create the multiplexer
         final Properties props = new Properties();
         if (queueSize != null) {
-            props.setProperty(EventMultiplexerSingleThreaded.PROP_QUEUE_DEPTH, queueSize);
+            props.setProperty("queueDepth", queueSize);
         }
         if (offerStrategy != null) {
-            props.setProperty(EventMultiplexerSingleThreaded.PROP_QUEUE_OFFER_STRATEGY, offerStrategy);
+            props.setProperty("queueOfferStrategy", offerStrategy);
         }
         if (waitStrategy != null) {
-            props.setProperty(EventMultiplexerSingleThreaded.PROP_QUEUE_WAIT_STRATEGY, waitStrategy);
+            props.setProperty("queueWaitStrategy", waitStrategy);
         }
         if (consumerAffinity != null) {
-            props.setProperty(EventMultiplexerSingleThreaded.PROP_QUEUE_DRAINER_CPU_AFFINITY_MASK, consumerAffinity);
+            props.setProperty("queueDrainerCpuAffinityMask", consumerAffinity);
         }
-        final IEventMultiplexer mux = EventMultiplexerSingleThreaded.create("test", new EventHandler(), props);
+        final IEventMultiplexer mux = EventMultiplexerSingleThreaded.create("test", false, new EventHandler(), props);
 
         // dump config
         System.out.println("Configuration");
@@ -156,9 +156,9 @@ final public class Driver extends AnnotatedCommand {
         System.out.println("  Queue Size.................." + queueSize + " (actual=" + mux.getStats().getCapacity() + ")");
         System.out.println("  Producer Affinity..........." + producerAffinity);
         System.out.println("  Consumer Affinity..........." + consumerAffinity);
-        System.out.println("  nv.optimizefor.............." + (Config.optimizeForThroughput() ? "Throughput" : (Config.optimizeForLatency() ? "Latency" : "None")));
-        System.out.println("  nv.optimizeMemoryUsage......" + Config.optimizeMemoryUsage());
-        System.out.println("  nv.conservecpu.............." + Config.conserveCPU());
+        System.out.println("  nv.optimizefor.............." + (XRuntime.optimizeForThroughput() ? "Throughput" : (XRuntime.optimizeForLatency() ? "Latency" : "None")));
+        System.out.println("  nv.optimizeMemoryUsage......" + XRuntime.optimizeMemoryUsage());
+        System.out.println("  nv.conservecpu.............." + XRuntime.conserveCPU());
         System.out.println("  nv.enablecpuaffinitymask...." + UtlThread.cpuAffinityMasksEnabled());
 
         // open (start) the multiplexer
@@ -197,7 +197,6 @@ final public class Driver extends AnnotatedCommand {
     }
 
     public static void main(String[] args) throws Exception {
-        Config.initializeEnvironment();
         new Driver().run(args);
     }
 }
