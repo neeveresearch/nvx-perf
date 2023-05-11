@@ -34,36 +34,41 @@ import com.neeve.tools.interactive.commands.AnnotatedCommand;
 
 abstract class Common extends AnnotatedCommand implements IEventHandler {
     @Option(shortForm = 'u', longForm = "username", required = true, description = "The bus binding username")
-    String username;
+    protected String _username;
 
-    @Option(shortForm = 'b', longForm = "busDescriptor", required = true, description = "the messaging bus connection descriptor")
-    String busDescriptorString;
+    @Option(shortForm = 'd', longForm = "descriptor", required = true, description = "the messaging bus connection descriptor")
+    protected String _descriptor;
 
-    @Option(shortForm = 'c', longForm = "count", defaultValue = "-1", description = "number of messages to send if less than 1 then unlimited")
-    protected int count;
+    @Option(shortForm = 'c', longForm = "testCount", defaultValue = "3000000", description = "number of messages to send if less than 1 then unlimited")
+    protected int _testCount;
+
+    @Option(shortForm = 'r', longForm = "testRate", required = true, defaultValue = "100000", description = "The send rate. If less than 1 then unlimited")
+    protected int _testRate;
 
     @Option(shortForm = 'k', longForm = "channelKey", description = "the channel key")
-    String channelKey;
+    protected String _channelKey;
 
     @Option(shortForm = 'f', longForm = "channelFilter", description = "the channel filter")
-    String channelFilter;
+    protected String _channelFilter;
 
-    @Option(shortForm = 'q', longForm = "qos", defaultValue = "Guaranteed", description = "the delivery QOS")
-    MessageChannel.Qos qos;
+    @Option(shortForm = 'q', longForm = "channelQos", defaultValue = "Guaranteed", description = "the delivery QOS")
+    protected MessageChannel.Qos _channelQos;
 
-    @Option(shortForm = 'e', longForm = "encoding", defaultValue = "xbuf2", description = "the encoding type")
-    String encoding;
+    @Option(shortForm = 'e', longForm = "encoding", defaultValue = "rumi.xbuf2", description = "the encoding type")
+    protected String _encoding;
 
-    protected MessageBusBinding binding;
-    protected MessageChannel channel;
+    @Option(shortForm = 'i', longForm = "printIntervalStats", description = "whether to output stats at periodic intervals instead of only at the end")
+    protected boolean _printIntervalStats;
+
+    @Option(shortForm = 'f', longForm = "dontWriteLatenciesToFile", description = "whether to suppress writing latency values to a file")
+    protected boolean _dontWriteLatenciesToFile;
+
+    protected MessageBusBinding _binding;
+    protected MessageChannel _channel;
 
     static {
-        System.setProperty("msg.latency.stats", "true");
-        System.setProperty("nv.link.network.stampiots", "true");
-        System.setProperty("nv.discovery.descriptor", "local://discovery&initWaitTime=0&maxEntityAge=5000");
-        System.setProperty("nv.time.usenative", "true");
         try {
-            final MessageBusDescriptor busDescriptor = MessageBusDescriptor.create("nvx-perf-sma");
+            final MessageBusDescriptor busDescriptor = MessageBusDescriptor.create("nvx-perf-messaging");
             final MessageChannelDescriptor channelDescriptor = MessageChannelDescriptor.create("default", busDescriptor);
             busDescriptor.addChannel(channelDescriptor);
             busDescriptor.save(ConfigRepositoryFactory.getInstance().getDefaultRepository(), null);
@@ -74,14 +79,8 @@ abstract class Common extends AnnotatedCommand implements IEventHandler {
         }
     }
 
-    public final void execute() throws Exception {
-        doRun();
-    }
-
-    protected abstract void doRun() throws Exception;
-
     /**
-     * Connects to the bus. 
+     * Connect to the messaging bus. 
      *  
      * @param join True if the channel should be joined. 
      *  
@@ -90,16 +89,16 @@ abstract class Common extends AnnotatedCommand implements IEventHandler {
     protected void connect(final boolean join) throws Exception {
         final MessageBusDescriptor busDescriptor = MessageBusDescriptor.load(ConfigRepositoryFactory.getInstance().getDefaultRepository(), "nvx-perf-messaging", null);
         final MessageChannelDescriptor channelDescriptor = busDescriptor.getChannel("default");
-        busDescriptor.setProviderConfig(busDescriptorString);
+        busDescriptor.setProviderConfig(_descriptor);
         channelDescriptor.setChannelId((short)1);
-        channelDescriptor.setChannelQos(qos);
-        channelDescriptor.setChannelKey(channelKey);
-        channelDescriptor.setChannelFilter(channelFilter);
-        binding = MessageBusBindingFactory.getInstance().createBinding(username, busDescriptor, this);
-        channel = binding.getMessageChannel("default");
+        channelDescriptor.setChannelQos(_channelQos);
+        channelDescriptor.setChannelKey(_channelKey);
+        channelDescriptor.setChannelFilter(_channelFilter);
+        _binding = MessageBusBindingFactory.getInstance().createBinding(_username, busDescriptor, this);
+        _channel = _binding.getMessageChannel("default");
         if (join) {
-            channel.join(0);
+            _channel.join(0);
         }
-        binding.start();
+        _binding.start();
     }
 }

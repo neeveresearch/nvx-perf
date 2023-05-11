@@ -21,250 +21,122 @@
  */
 package com.neeve.perf.sma;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
-
-import com.lmax.disruptor.BatchEventProcessor;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.MultiThreadedLowContentionClaimStrategy;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SequenceBarrier;
+import java.text.DecimalFormat;
 
 import com.neeve.ci.XRuntime;
 import com.neeve.event.Event;
 import com.neeve.event.IEventHandler;
+import com.neeve.perf.common.LatencyWriter;
+import com.neeve.perf.common.SystemProperties;
 import com.neeve.perf.serialization.CarFactory;
 import com.neeve.sma.MessageChannel;
 import com.neeve.sma.MessageView;
 import com.neeve.sma.SmaException;
 import com.neeve.tools.interactive.commands.AnnotatedCommand;
-import com.neeve.util.UtlGovernor;
-import com.neeve.util.UtlProps;
+import com.neeve.util.UtlConstants;
 import com.neeve.util.UtlThread;
 import com.neeve.util.UtlTime;
 
-/**
- * Sender to benchmark SMA performance
- */
 @AnnotatedCommand.Command(keywords = "Sender", description = "A sender to benchmark SMA Performance")
 final public class Sender extends Common implements IEventHandler {
-    final private class DetachedSender {
-        final private class CarrierEvent {
-            MessageChannel channel;
-            MessageView message;
+    @Option(shortForm = 'm', longForm = "messageSize", required = false, defaultValue = "256", description = "the message data size.")
+    private int _messageSize;
 
-            CarrierEvent() {
-            }
+    @Option(shortForm = 'p', longForm = "dontPopulateMessage", description = "whether to not populate outbound messages with full content i.e. only timestamp is sent")
+    boolean _dontPopulate;
 
-            final void reset() {
-                channel = null;
-                message.dispose();
-                message = null;
-            }
-        };
-
-        final private class CarrierEventProcessor implements EventHandler<CarrierEvent> {
-            final public void onEvent(final CarrierEvent event,
-                                      final long sequence,
-                                      final boolean endOfBatch) throws Exception {
-                try {
-                    Sender.this.sendMessage(event.message, event.channel);
-                }
-                catch (Throwable e) {
-                    e.printStackTrace();
-                }
-                finally {
-                    event.reset();
-                }
-            }
-        };
-
-        final private class SenderThread extends Thread {
-            final private long affinity;
-
-            SenderThread(final String name, 
-                         final BatchEventProcessor<CarrierEvent> batchProcessor,
-                         final long affinity) {
-                super(batchProcessor);
-                this.affinity = affinity;
-                setDaemon(true);
-                setName(name);
-            }
-
-            @Override
-            final public void run() {
-                UtlThread.setCPUAffinityMask(affinity);
-                super.run();
-            }
-        }
-
-        final private int id;
-        final private RingBuffer<CarrierEvent> ringBuffer;
-        final private MessageChannel channel;
-        final private SenderThread senderThread;
-
-        DetachedSender(final int id, final MessageChannel channel) {
-            // store id
-            this.id = id;
-
-            // create the disruptor
-            ringBuffer = new RingBuffer<CarrierEvent>(new EventFactory<CarrierEvent>() {
-                @Override
-                final public CarrierEvent newInstance() {
-                    return new CarrierEvent();
-                }
-            }, new MultiThreadedLowContentionClaimStrategy(64), XRuntime.createWaitStrategy("Blocking", true));
-            final BatchEventProcessor batchProcessor = new BatchEventProcessor<CarrierEvent>(ringBuffer, 
-                                                                                             ringBuffer.newBarrier(), 
-                                                                                             new CarrierEventProcessor());
-            ringBuffer.setGatingSequences(batchProcessor.getSequence());
-            (senderThread = new SenderThread("sender-" + id, 
-                                             batchProcessor,
-                                             UtlThread.parseAffinityMask(XRuntime.getValue("affinity." + id, "0")))).start();
-            try {
-                Thread.sleep(100);
-            }
-            catch (InterruptedException e) {}
-
-            // store the channel
-            this.channel = channel;
-        }
-
-        final void sendMessage() {
-            final MessageView message = carFactory.createCar(populate);
-            final long sequence = ringBuffer.next();
-            final CarrierEvent carrierEvent = ringBuffer.get(sequence);
-            carrierEvent.channel = channel;
-            carrierEvent.message = message;
-            ringBuffer.publish(sequence);
-        }
-    }
-
-    /*
-     * Configuration options
-     */
-    @Option(shortForm = 't', longForm = "senders", required = false, defaultValue = "1", description = "The number of sender threads to use")
-    private int numSenders;
-    @Option(shortForm = 'r', longForm = "rate", required = true, defaultValue = "-1", description = "The send rate. If less than 1 then unlimited")
-    private int rate;
-    @Option(shortForm = 'i', longForm = "size", required = false, defaultValue = "256", description = "the message data size.")
-    private int size;
-    @Option(shortForm = 'p', longForm = "populate", defaultValue = "true", description = "populate outbound messages with full content (otherwise only timestamp is sent)")
-    boolean populate;
-
-    /*
-     * Private scope members
-     */
-    final private CarFactory carFactory;
-    final private List<DetachedSender> detachedSenders;
-    final private Random random;
-    private boolean done;
-
-    public Sender() {
-        carFactory = new CarFactory(encoding);
-        detachedSenders = new ArrayList<DetachedSender>();
-        random = new Random(System.currentTimeMillis());
-    }
+    @Option(shortForm = 'a', longForm = "cpuAffinityMask", description = "which CPU(s) to affinitize the sending thread to")
+    private String _cpuAffinityMask;
 
     final private void sendMessage(final MessageView message, final MessageChannel channel) throws SmaException {
-        channel.sendMessage(message, null, MessageChannel.ALREADY_SYNCD | MessageChannel.KEY_ALREADY_RESOLVED | MessageChannel.KEY_ALREADY_VALIDATED );
+        _channel.sendMessage(message, null, MessageChannel.ALREADY_SYNCD | MessageChannel.KEY_ALREADY_RESOLVED | MessageChannel.KEY_ALREADY_VALIDATED );
     }
 
     @Override
     final public void onEvent(final Event event) {}
 
-    final public void interrupt(Thread commandThread) {
-        done = true;
-    }
-
     @Override
-    final protected void doRun() throws Exception {
-        // initialize
-        final boolean detachedSend = numSenders > 1;
-        done = false;
+    final public void execute() throws Exception {
+        // affinitize to CPU
+        if (_cpuAffinityMask != null) {
+            System.out.println("[Sender] Affinitizing thread to CPU " + _cpuAffinityMask);
+            UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(_cpuAffinityMask));
+        }
 
-        // dump config
-        System.out.println("Streaming Sender");
-        System.out.println("  Bus.............." + busDescriptorString);
-        System.out.println("  Send Count......." + (count >= 1 ? count : "Unlimited"));
-        System.out.println("  Send Rate........" + (rate >= 1 ? "" + rate : "Unlimited"));
-        System.out.println("  Send Size........" + size);
-        System.out.println("  Populate........." + populate);
-        System.out.println("  Num Senders......" + numSenders);
-        System.out.println("  Encoding........." + encoding);
-        System.out.println("  Key.............." + channelKey);
-        System.out.println("  Qos.............." + qos);
-        System.out.println("  nv.optimizefor..." + (XRuntime.optimizeForThroughput() ? "Throughput" : (XRuntime.optimizeForLatency() ? "Latency" : "None")));
+        // dump system props
+        SystemProperties.dump();
 
-        // connect
+        // dump test parameters
+        DecimalFormat dfmt = new DecimalFormat("#,###");
+        System.out.println("[Sender] Bus Descriptor......" + _descriptor);
+        System.out.println("[Sender] Test Count.........." + dfmt.format(_testCount));
+        System.out.println("[Sender] Test Rate..........." + dfmt.format(_testRate));
+        System.out.println("[Sender] Message Size........" + _messageSize);
+        System.out.println("[Sender] Message Encoding...." + _encoding);
+        System.out.println("[Sender] Populate Message...." + !_dontPopulate);
+        System.out.println("[Sender] Channel Key........." + _channelKey);
+        System.out.println("[Sender] Channel Qos........." + _channelQos);
+        System.out.println("[Sender] CPU affinity mask..." + _cpuAffinityMask);
+
+        // connect to bus
         connect(false);
 
-        // set affinity
-        UtlThread.parseAffinityMask(XRuntime.getValue("affinity.0", "0"));
+        // create the message
+        final MessageView message = new CarFactory(_encoding).createCar(!_dontPopulate);
 
-        // create detached senders
-        if (detachedSend) {
-            for (int i = 0 ; i < numSenders ; i++) {
-                detachedSenders.add(new DetachedSender(i+1, channel));
-            }
+        // calculate UtlTime.now() overhead
+        System.out.println("[Sender] Calculating UtlTime.now() overhead...");
+        long nanoTimeOverhead = 0l;
+        long start = System.nanoTime();
+        for (int i = 0; i < 100000000l; i++) {
+            UtlTime.now();
         }
+        nanoTimeOverhead = (System.nanoTime() - start) / 100000000l;
+        System.out.println("[Sender] ..." + nanoTimeOverhead + "ns");
 
-        // send
-        System.out.println("Sending...");
-        int i = 0;
-        final long start = System.currentTimeMillis();
-        final long statInterval = 1000;
-        long istart = System.currentTimeMillis();
-        int di = 0;
-        UtlGovernor throttler = new UtlGovernor(rate);
-        count = count < 1 ? Integer.MAX_VALUE : count;
-        while (i < count && !done) {
-            throttler.blockToNext();
-            final long current = System.currentTimeMillis();
-            if (detachedSend) {
-                detachedSenders.get(random.nextInt(detachedSenders.size())).sendMessage();
-            }
-            else {
-                final MessageView message = carFactory.createCar(populate);
-                try {
-                    sendMessage(message, channel);
-                }
-                finally { 
-                    message.dispose();
-                }
-            }
-            di++;
-            i++;
-            if (current - istart > 1000) { // every 1 second
-                int deltaRate = (int)((di * statInterval) / (current - istart));
-                int overallRate = (int)((i * statInterval) / (current - start));
-                System.out.println("Sent=" + i + " DRate=" + deltaRate + " Rate=" + overallRate);
-                istart = current;
-                di = 0;
+        // create latency writer
+        final LatencyWriter lw = new LatencyWriter("nw-write", _dontWriteLatenciesToFile ? null : "latencies.write.bin", _printIntervalStats);
+
+        // run test
+        int numSent = 0;
+        long ts1, ts2, ts3;
+        final long nanosPerMsg = _testRate > 0 ? (1000000000l / _testRate) : 0;
+        System.out.println("[Sender] Running test (" + dfmt.format(_testCount) + " messages @ " + _testRate + " msgs/sec)...");
+        long next = System.nanoTime() + nanosPerMsg;
+        lw.start(_testRate, _testCount);
+        start = System.currentTimeMillis();
+        while (numSent < _testCount) {
+            ts1 = System.nanoTime();
+            if (ts1 >= next) {
+                ts3 = UtlTime.now();
+                message.setOriginTs(UtlTime.nowSinceEpoch());
+                sendMessage(message, _channel);
+                numSent++;
+                ts2 = message.getPreWireTs();
+                final int writeTime = (int)((ts2 - ts3) * 1000 - nanoTimeOverhead);
+                lw.write(writeTime);
+                next += nanosPerMsg;
             }
         }
-        try {
-            binding.flush(null);
-            binding.close();
+        final long stop = System.currentTimeMillis();
+        lw.stop();
+
+        // close bus connection
+        _binding.close();
+
+        // stats
+        final long overallRate = (numSent * 1000l) / (stop - start);
+        System.out.println("[Sender] Sent " + dfmt.format(numSent) + " messages at " + dfmt.format(overallRate) + " msgs/sec.");
+        if (!_dontWriteLatenciesToFile) {
+            System.out.println("[Sender] Test complete (run rumi-reporter on latencies.write.bin to calculate latency stats).");
         }
-        catch (SmaException e) {
-            throw new RuntimeException(e);
-        }
-        final long current = System.currentTimeMillis();
-        final int overallRate = (int)((i * statInterval) / (current - start));
-        System.out.println("Done (Sent=" + i + ", Rate=" + overallRate + ")");
-        try {
-            binding.close();
-        }
-        catch (SmaException e) {
-            throw new RuntimeException(e);
+        else {
+            System.out.println("[Sender] Test complete.");
         }
     }
 
     public static void main(String[] args) throws Exception {
+        System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
         new Sender().run(args);
     }
 }
