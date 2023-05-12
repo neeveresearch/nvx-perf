@@ -312,7 +312,7 @@ final public class PingPongSender extends AnnotatedCommand {
         }
         final long stop = System.currentTimeMillis();
         waitForRoundTripsToComplete(numSent, reader);
-        lw.stop();
+        lw.close();
         System.out.println("[PingPongSender] Test complete.");
         if (_stats) stats(numSent, deltaNumSent, reader.numReceived(), reader.deltaNumReceived(), stop, start, 0);
 

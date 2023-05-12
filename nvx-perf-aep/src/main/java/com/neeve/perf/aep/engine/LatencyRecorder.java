@@ -88,7 +88,7 @@ final public class LatencyRecorder {
     }
 
     final public static void stop() throws Exception {
-        _lw.stop();
+        _lw.close();
     }
 }
 

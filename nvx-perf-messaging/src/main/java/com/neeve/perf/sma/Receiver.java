@@ -51,7 +51,7 @@ final public class Receiver extends Common {
                     final int latency = (int)(UtlTime.nowSinceEpoch() - message.getOriginTs());
                     _lw.write(latency * 1000);
                     if (++_numReceived == _testCount) {
-                        _lw.stop();
+                        _lw.close();
                         _done = true;
                     }
                     break;

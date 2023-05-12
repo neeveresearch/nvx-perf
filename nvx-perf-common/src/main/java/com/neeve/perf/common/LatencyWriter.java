@@ -35,6 +35,13 @@ import com.neeve.quark.QuarkBuffer;
  * Utility class containing methods to write performance latencies to a file
  */
 final public class LatencyWriter {
+    private enum State {
+        Init,
+        Started,
+        Stopped,
+        Closed;
+    }
+
     final private class Counters {
         long start;
         long dstart;
@@ -93,7 +100,7 @@ final public class LatencyWriter {
     private RandomAccessFile _file;
     private QuarkBuffer _mappedFile;
     private long _lw;
-    private boolean _started;
+    private State _state;
 
     /**
      * Construct a latency writer 
@@ -123,6 +130,7 @@ final public class LatencyWriter {
         _printIntervalStats = printIntervalStats;
         _printStatsInNanos = XRuntime.getValue("nv.perf.printlatenciesinnanos", printStatsInNanos);
         _counters = new Counters();
+        _state = State.Init;
     }
 
     /**
@@ -303,9 +311,6 @@ final public class LatencyWriter {
      * Process a set of collected latencies 
      */
     final private void process() throws Exception {
-        // validate state
-        if (!_started) throw new IllegalStateException("not started");
-
         // get counters
         final long latencies = _counters.latencies;
         final long itotal = _counters.itotal;
@@ -341,7 +346,7 @@ final public class LatencyWriter {
      */
     final public void start(final int rate, final int count) throws Exception {
         // validate state
-        if (_started) throw new IllegalStateException("already started");
+        if (_state != State.Init) throw new IllegalStateException("illegal state '" + _state + "'");
 
         // initialize counter
         _counters.init(rate, count);
@@ -358,7 +363,7 @@ final public class LatencyWriter {
         if (_printHeader && _printIntervalStats) printHeader();
 
         // update state
-        _started = true;
+        _state = State.Started;
     }
 
     /**
@@ -371,7 +376,7 @@ final public class LatencyWriter {
      */
     final public boolean write(final int val) throws Exception {
         // validate state
-        if (!_started) throw new IllegalStateException("not started");
+        if (_state != State.Started) throw new IllegalStateException("illegal state '" + _state + "'");
 
         // add to counters and process stored set on write to file
         final long now = System.nanoTime();
@@ -390,14 +395,31 @@ final public class LatencyWriter {
      */
     final public void stop() throws Exception {
         // validate state
-        if (!_started) throw new IllegalStateException("not started");
+        if (_state == State.Stopped) return;
+        if (_state != State.Started) throw new IllegalStateException("illegal state '" + _state + "'");
 
         // process remainder latencies
         if (_counters.icount > 0) {
             process();
         }
 
+        // update state
+        _state = State.Stopped;
+    }
+
+    /**
+     * Close a latency writer 
+     *  
+     * @param finish Whether the latency writing is finished
+     */
+    final public void close(final boolean finish) throws Exception {
+        // validate state
+        if (_state == State.Closed) return;
+
         try {
+            // stop
+            stop();
+
             // latencies written to a file?
             if (_filename != null) {
                 // release file resources
@@ -420,23 +442,38 @@ final public class LatencyWriter {
 
                 // print latencies for full run
                 printLatenciesFromFile();
-
-                // finally, if print header is configured, then print separator
-                if (_printHeader) {
-                    printSeparator();
-                }
             }
 
-            // print one extra line
-            if (_printHeader && (_filename != null || _printIntervalStats)) {
+            // finally, if print header is configured, then print separator
+            if (finish && _printHeader && (_filename != null || _printIntervalStats)) {
+                printSeparator();
                 System.out.println("");
             }
 
             // free counter resources
             _counters.done();
+            
         }
         finally {
-            _started = false;
+            _state = State.Closed;
         }
+    }
+
+    /**
+     * Close a latency writer 
+     *  
+     * <p> 
+     * Invokes <code>close(true)</code> 
+     * </p> 
+     */
+    final public void close() throws Exception {
+        close(true);
+    }
+
+    /**
+     * Print finish line
+     */
+    final public void finish() {
+        printSeparator();
     }
 }

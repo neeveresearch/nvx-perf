@@ -28,6 +28,7 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.DecimalFormat;
 import java.util.Properties;
 
 import com.neeve.io.IOBuffer;
@@ -36,6 +37,7 @@ import com.neeve.ods.IStoreReader;
 import com.neeve.ods.StoreBinding;
 import com.neeve.ods.StoreCommitEntry;
 import com.neeve.ods.StoreObjectFactoryRegistry;
+import com.neeve.perf.common.LatencyWriter;
 import com.neeve.perf.serialization.CarFactory;
 import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
@@ -48,8 +50,10 @@ import com.neeve.util.UtlThread;
 
 final public class StoreLogger {
     final private RogLog _logger;
+    final private DecimalFormat _dfmt;
 
     StoreLogger(final Properties props) throws Exception {
+        _dfmt = new DecimalFormat("#,###");
         _logger = RogLog.create("perf", props);
     }
 
@@ -78,213 +82,158 @@ final public class StoreLogger {
     }
 
     final private void write(final int count,
+                             final int warmupTime,
                              final int rate,
                              final int numPerCommit,
                              final boolean syncOnCommit,
-                             final boolean recordTimes,
-                             final long nanoTimeOverhead) {
+                             final long nanoTimeOverhead,
+                             final boolean noLatencyWrites,
+                             final boolean printIntervalStats) throws Exception {
         System.out.println("Writing...");
-        final int[] populateTimes = recordTimes ? new int[count] : null;
-        final int[] writeTimes = recordTimes ? new int[count] : null;
-        final int[] totalTimes = recordTimes ? new int[count] : null;
-        try {
-            int i = 1;
-            final long start = System.nanoTime();
-            long istart = start;
-            int di = 0;
-            final long nanosPerMsg = rate > 0 ? (1000000000l / rate) : 0;
-            long next = start + nanosPerMsg;
-            boolean warmUpCompleted = false;
-            int postWarmUpCount = 0;
-            long postWarmUpStart = 0;
-            final StoreCommitEntry commitEntry = StoreCommitEntry.create();
-            final IRogMessage message = (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
-            while (i < count) {
+        final StoreCommitEntry commitEntry = StoreCommitEntry.create();
+        final IRogMessage message = (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+        final LatencyWriter prepTimes = new LatencyWriter("prep", noLatencyWrites ? null : "latencies.prep.bin", true, printIntervalStats, false);
+        final LatencyWriter writeTimes = new LatencyWriter("write", noLatencyWrites ? null : "latencies.write.bin", false, printIntervalStats, false);
+        final LatencyWriter totalTimes = new LatencyWriter("total", noLatencyWrites ? null : "latencies.total.bin", false, printIntervalStats, false);
+        int i = 1;
+        final long start = System.nanoTime();
+        final long nanosPerMsg = rate > 0 ? (1000000000l / rate) : 0;
+        long next = start + nanosPerMsg;
+        boolean warmupCompleted = false;
+        int postWarmupCount = 0;
+        long postWarmupStart = 0;
+        prepTimes.start(rate, count);
+        writeTimes.start(rate, count);
+        totalTimes.start(rate, count);
+        while (i < count) {
+            final long current = System.nanoTime();
+            if (current >= next) {
+                // calc commit start and/or end
+                final boolean commitStart = numPerCommit == 1 || ((i+1) % numPerCommit) == 1;
+                final boolean commitEnd = numPerCommit == 1 || ((i+1) % numPerCommit) == 0;
+
+                // prepare the commit entry for write
+                final long t0 = System.nanoTime();
+                prepareCommitEntry(commitEntry, message, commitEnd);
+                final long t1 = System.nanoTime();
+                final int prepTime = (int)(t1 - t0 - nanoTimeOverhead);
+                prepTimes.write(prepTime);
+
+                // write commit entry
+                // ...clearing time of the commit entry needs to be included in write time)
+                _logger.writeCommitEntry(commitEntry, true, commitEnd && syncOnCommit);
+                clearCommitEntry(commitEntry);
+                final int writeTime = (int)(System.nanoTime() - t1 - nanoTimeOverhead);
+                writeTimes.write(writeTime);
+
+                // record total time
+                totalTimes.write(prepTime + writeTime);
+
+                // update counters
+                next += nanosPerMsg;
+                i++;
+                if (warmupCompleted) {
+                    postWarmupCount++;
+                }
+            }
+            if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
+                System.out.println("Warm up complete.");
+                postWarmupStart = current;
+                warmupCompleted = true;
+            }
+        }
+        prepTimes.stop();
+        writeTimes.stop();
+        totalTimes.stop();
+        prepTimes.close(false);
+        writeTimes.close(false);
+        totalTimes.close(false);
+        prepTimes.finish();
+
+        // throughput stats
+        final long current = System.nanoTime();
+        final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
+        System.out.println("Wrote " + _dfmt.format(postWarmupCount) + " @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
+        System.out.println("Write complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
+    }
+
+    final private void readUsingLogReader(final int count, final boolean lazyDeserialize) throws Exception {
+        // get reader
+        System.out.println("Reading using log reader...");
+        long ts = System.nanoTime();
+        final RogLogReader reader = _logger.createReader();
+        reader.setLazyDeserialization(lazyDeserialize);
+        System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
+
+        // read
+        int i = 0;
+        final long start = System.nanoTime();
+        boolean warmupCompleted = false;
+        int postWarmupCount = 0;
+        long postWarmupStart = 0;
+        RogLog.Entry entry;
+        for (int j = 0; j < count; j++) {
+            if ((entry = reader.next()) != null) {
+                entry.dispose();
+                i++;
+                if (warmupCompleted) {
+                    postWarmupCount++;
+                }
                 final long current = System.nanoTime();
-                if (current >= next) {
-                    final boolean commitStart = numPerCommit == 1 || ((i+1) % numPerCommit) == 1;
-                    final boolean commitEnd = numPerCommit == 1 || ((i+1) % numPerCommit) == 0;
-                    final long t0 = recordTimes ? System.nanoTime() : 0l;
-                    prepareCommitEntry(commitEntry, message, commitEnd);
-                    final long t1 = recordTimes ? System.nanoTime() : 0l;
-                    if (recordTimes) populateTimes[i] = (int)(t1 - t0 - nanoTimeOverhead);
-                    _logger.writeCommitEntry(commitEntry, true, commitEnd && syncOnCommit);
-                    clearCommitEntry(commitEntry);
-                    if (recordTimes) writeTimes[i] = (int)(System.nanoTime() - t1 - nanoTimeOverhead);
-                    if (recordTimes) totalTimes[i] = populateTimes[i] + writeTimes[i];
-                    next += nanosPerMsg;
-                    di++;
-                    i++;
-                    if (warmUpCompleted) {
-                        postWarmUpCount++;
-                    }
-                }
-                if (!warmUpCompleted && current - start > 5000000000L) { // 5 second warmup
+                if (!warmupCompleted && current - start > 5000000000L) { // 5 second warmup
                     System.out.println("Warm up complete.");
-                    postWarmUpStart = current;
-                    warmUpCompleted = true;
-                }
-                if (current - istart > 1000000000L) { // every 1 second
-                    final int effectiveRate = (int)((di * 1000000000L) / (current - istart));
-                    System.out.println("Written=" + i + " Rate=" + effectiveRate);
-                    istart = current;
-                    di = 0;
+                    postWarmupStart = current;
+                    warmupCompleted = true;
                 }
             }
-            _logger.flush(syncOnCommit);
-            final long current = System.nanoTime();
-            final int overallRate = (int)((postWarmUpCount * 1000000000L) / (current - postWarmUpStart));
-            System.out.println("Done (Written=" + i + " [Post Warmup=" + postWarmUpCount + "] Rate=" + overallRate + ")");
-            if (recordTimes) {
-                try {
-                    // prep times
-                    System.out.println("Writing prep times...");
-                    FileOutputStream fos = new FileOutputStream(new File("populatetimes.bin"));
-                    DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(fos, 8192));
-                    for (int k = 0; k < count; k++) {
-                        dos.writeInt(k);
-                        dos.writeInt(populateTimes[k]);
-                    }
-                    dos.flush();
-                    dos.close();
-
-                    // write times
-                    System.out.println("Writing write times...");
-                    fos = new FileOutputStream(new File("writetimes.bin"));
-                    dos = new DataOutputStream(new BufferedOutputStream(fos, 8192));
-                    for (int k = 0; k < count; k++) {
-                        dos.writeInt(k);
-                        dos.writeInt(writeTimes[k]);
-                    }
-                    dos.flush();
-                    dos.close();
-
-                    // total times
-                    System.out.println("Total times...");
-                    fos = new FileOutputStream(new File("totaltimes.bin"));
-                    dos = new DataOutputStream(new BufferedOutputStream(fos, 8192));
-                    for (int k = 0; k < count; k++) {
-                        dos.writeInt(k);
-                        dos.writeInt(totalTimes[k]);
-                    }
-                    dos.flush();
-                    dos.close();
-                }
-                catch (IOException e) {
-                    e.printStackTrace();
-                }
-                System.out.println("Done");
-            }
         }
-        catch (Exception e) {
-            System.out.println("Write failure [" + e.toString() + "]...");
-            e.printStackTrace();
-        }
+        final long current = System.nanoTime();
+        final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
+        System.out.println("Read " + _dfmt.format(postWarmupCount) + " @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
     }
 
-    final private void readUsingLogReader(final int count, final boolean lazyDeserialize) {
-        System.out.println("Reading...");
-        try {
-            long ts = System.nanoTime();
-            final RogLogReader reader = _logger.createReader();
-            reader.setLazyDeserialization(lazyDeserialize);
-            System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
+    final private void readUsingStoreReader(final int count) throws Exception {
+        // get reader
+        System.out.println("Reading using store reader...");
+        long ts = System.nanoTime();
+        final IStoreReader.IterativeReader reader = _logger.iterativeReader(0);
+        System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
 
-            int i = 0;
-            int di = 0;
-            final long start = System.nanoTime();
-            long istart = start;
-            boolean warmUpCompleted = false;
-            int postWarmUpCount = 0;
-            long postWarmUpStart = 0;
-            RogLog.Entry entry;
-            for (int j = 0; j < count; j++) {
-                if ((entry = reader.next()) != null) {
-                    entry.dispose();
-                    di++;
-                    i++;
-                    if (warmUpCompleted) {
-                        postWarmUpCount++;
-                    }
-                    final long current = System.nanoTime();
-                    if (!warmUpCompleted && current - start > 5000000000L) { // 5 second warmup
-                        System.out.println("Warm up complete.");
-                        postWarmUpStart = current;
-                        warmUpCompleted = true;
-                    }
-                    if (current - istart > 1000000000L) { // every 1 second
-                        final int effectiveRate = (int)((di * 1000000000L) / (current - istart));
-                        System.out.println("Read=" + i + " Rate=" + effectiveRate);
-                        istart = current;
-                        di = 0;
-                    }
+        // read
+        int i = 0;
+        final long start = System.nanoTime();
+        boolean warmupCompleted = false;
+        int postWarmupCount = 0;
+        long postWarmupStart = 0;
+        StoreCommitEntry entry;
+        for (int j = 0; j < count; j++) {
+            if ((entry = reader.next()) != null) {
+                clearCommitEntry(entry);
+                i++;
+                if (warmupCompleted) {
+                    postWarmupCount++;
+                }
+                final long current = System.nanoTime();
+                if (!warmupCompleted && current - start > 5000000000L) { // 5 second warmup
+                    System.out.println("Warm up complete.");
+                    postWarmupStart = current;
+                    warmupCompleted = true;
                 }
             }
-            final long current = System.nanoTime();
-            final int overallRate = (int)((postWarmUpCount * 1000000000L) / (current - postWarmUpStart));
-            System.out.println("Done (Read=" + i + " [Post Warmup=" + postWarmUpCount + "] Rate=" + overallRate + ")");
         }
-        catch (Exception e) {
-            System.out.println("Failure [" + e.toString() + "]...");
-            e.printStackTrace();
-        }
-    }
-
-    final private void readUsingStoreReader(final int count) {
-        System.out.println("Reading...");
-        try {
-            long ts = System.nanoTime();
-            final IStoreReader.IterativeReader reader = _logger.iterativeReader(0);
-            System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
-
-            int i = 0;
-            int di = 0;
-            final long start = System.nanoTime();
-            long istart = start;
-            boolean warmUpCompleted = false;
-            int postWarmUpCount = 0;
-            long postWarmUpStart = 0;
-            StoreCommitEntry entry;
-            for (int j = 0; j < count; j++) {
-                if ((entry = reader.next()) != null) {
-                    entry.serializedObject.dispose();
-                    entry.fin();
-                    di++;
-                    i++;
-                    if (warmUpCompleted) {
-                        postWarmUpCount++;
-                    }
-                    final long current = System.nanoTime();
-                    if (!warmUpCompleted && current - start > 5000000000L) { // 5 second warmup
-                        System.out.println("Warm up complete.");
-                        postWarmUpStart = current;
-                        warmUpCompleted = true;
-                    }
-                    if (current - istart > 1000000000L) { // every 1 second
-                        final int effectiveRate = (int)((di * 1000000000L) / (current - istart));
-                        System.out.println("Read=" + i + " Rate=" + effectiveRate);
-                        istart = current;
-                        di = 0;
-                    }
-                }
-            }
-            final long current = System.nanoTime();
-            final int overallRate = (int)((postWarmUpCount * 1000000000L) / (current - postWarmUpStart));
-            System.out.println("Done (Read=" + i + " [Post Warmup=" + postWarmUpCount + "] Rate=" + overallRate + ")");
-        }
-        catch (Exception e) {
-            System.out.println("Failure [" + e.toString() + "]...");
-            e.printStackTrace();
-        }
+        final long current = System.nanoTime();
+        final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
+        System.out.println("Read " + _dfmt.format(postWarmupCount) + " @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
     }
 
     final private void run(final int count,
+                           final int warmupTime,
                            final int rate,
                            final boolean lazyDeserialize,
                            final int numPerCommit,
                            final boolean syncOnCommit,
-                           final boolean useStoreReader,
-                           final boolean recordTimes) throws Exception {
+                           final boolean noLatencyWrites,
+                           final boolean printIntervalStats) throws Exception {
         try {
             // calculate nanoTime overhead
             long nanoTimeOverhead = 0l;
@@ -311,18 +260,16 @@ final public class StoreLogger {
             }
 
             // write
-            write(count, rate, numPerCommit, syncOnCommit, recordTimes, nanoTimeOverhead);
+            write(count, warmupTime, rate, numPerCommit, syncOnCommit, nanoTimeOverhead, noLatencyWrites, printIntervalStats);
 
-            // spacer
+            // flush
             System.out.println("");
+            _logger.flush(syncOnCommit);
 
             // read
-            if (useStoreReader) {
-                readUsingStoreReader(count);
-            }
-            else {
-                readUsingLogReader(count, lazyDeserialize);
-            }
+            readUsingLogReader(count, lazyDeserialize);
+            System.out.println("");
+            readUsingStoreReader(count);
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -342,8 +289,6 @@ final public class StoreLogger {
         System.err.println(" [{-z, --zeroOutInitial} zeroes out the preallocated length. only applies if --initialLength is specified and > 0]");
         System.err.println("   Specifies whether to zero out the preallocated length of the transaction log (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
-        System.err.println(" [{-a, --writeBufferSize} specifies the log write buffer size]");
-        System.err.println("   Specifies, in bytes, the log's write buffer size (default=8192)");
         System.err.println(" [{-n, --numPerCommit} number of writes per commit]");
         System.err.println("   Number of writes per commit (default=1)");
         System.err.println(" [{-m, --flushUsingMappedMemory} whether to flush using a memory mapped region of the log");
@@ -369,22 +314,22 @@ final public class StoreLogger {
         System.err.println("   Specifies the disruptor writer thread affinity. (default=[0])");
         System.err.println("   <This option only applies to detached writes>");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
-        System.err.println(" [{-b, --readBufferSize} specifies the log read buffer size]");
-        System.err.println("   Specifies, in bytes, the log's read buffer size (default=8192)");
         System.err.println(" [{-p, --pageSize} specifies the disk subsystem page size]");
         System.err.println("   Specifies (in bytes) the page size to use when reading/writing from/to disk (default=8192)");
         System.err.println(" [{-k, --lazyDeserialize} do not invoke getObject() on read]");
         System.err.println("   A value of false will cause Entry.getObject() to be invoked on read. A value of true will not (default=false)");
-        System.err.println(" [{-u, --useStoreReader} use an store reader to read the log file]");
-        System.err.println("   A value of true will cause an store reader to be used to read the log. Otherwise, a log reader is used. (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-c, --count} number of messages to persist]");
         System.err.println("   Number of messages to persist (default=10,000,000)");
+        System.err.println(" [{-t, --warmupTime} Warmup time]");
+        System.err.println("   Warmup time, in seconds, for calculation of throughput stats (default=2 (2 seconds))");
         System.err.println(" [{-r, --rate} write rate]");
         System.err.println("   Rate at which to persist messages (default=-1 (unlimited))");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
-        System.err.println(" [{-q, --time} record write times");
-        System.err.println("   Records how long it takes to write each message to the log (default=false)");
+        System.err.println(" [{-a, --noLatencyWrites} don't write latencies to a file");
+        System.err.println("   Indicates that latencies should not be written to a file (default=false)");
+        System.err.println(" [{-b, --printIntervalStats} print interval latency stats");
+        System.err.println("   Indicates that latencies stats should be printed on a periodic basis in addition to at the end (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-j, --affinity} CPU affinity of the write/read thread");
         System.err.println("   Sets the CPU affinity of the thread performing the read/write (default=false)");
@@ -395,35 +340,53 @@ final public class StoreLogger {
     // entry point
     final public static void main(final String[] args) throws Exception {
         final CmdLineParser parser = new CmdLineParser();
+        // log file related options
+        final CmdLineParser.Option logModeOption = parser.addStringOption('o', "logMode");
+        final CmdLineParser.Option initialLogLengthOption = parser.addIntegerOption('i', "initialLogLength");
+        final CmdLineParser.Option zeroOutInitialOption = parser.addBooleanOption('z', "zeroOutInitial");
+
+        // write related options
+        final CmdLineParser.Option numPerCommitOption = parser.addIntegerOption('n', "numPerCommit");
+        final CmdLineParser.Option flushUsingMappedMemoryOption = parser.addBooleanOption('m', "flushUsingMappedMemory");
+        final CmdLineParser.Option flushOnCommitOption = parser.addBooleanOption('f', "flushOnCommit");
+        final CmdLineParser.Option syncOnCommitOption = parser.addBooleanOption('y', "syncOnCommit");
+
+        // detached write related options
         final CmdLineParser.Option detachedOption = parser.addBooleanOption('d', "detached");
         final CmdLineParser.Option queueDepthOption = parser.addIntegerOption('q', "queueDepth");
         final CmdLineParser.Option publisherClaimStrategyOption = parser.addStringOption('l', "publisherClaimStrategy");
         final CmdLineParser.Option writerWaitStrategyOption = parser.addStringOption('w', "writerWaitStrategy");
         final CmdLineParser.Option writerAffinityOption = parser.addStringOption('x', "writerAffinity");
-        final CmdLineParser.Option logModeOption = parser.addStringOption('m', "logMode");
-        final CmdLineParser.Option initialLogLengthOption = parser.addIntegerOption('i', "initialLogLength");
-        final CmdLineParser.Option zeroOutInitialOption = parser.addBooleanOption('z', "zeroOutInitial");
+
+        // read related options
         final CmdLineParser.Option pageSizeOption = parser.addIntegerOption('p', "pageSize");
-        final CmdLineParser.Option flushUsingMappedMemoryOption = parser.addBooleanOption('m', "flushUsingMappedMemory");
-        final CmdLineParser.Option numPerCommitOption = parser.addIntegerOption('n', "numPerCommit");
-        final CmdLineParser.Option flushOnCommitOption = parser.addBooleanOption('f', "flushOnCommit");
-        final CmdLineParser.Option syncOnCommitOption = parser.addBooleanOption('y', "syncOnCommit");
+        final CmdLineParser.Option lazyDeserializeOption = parser.addBooleanOption('k', "lazyDeserialize");
+
+        // test parameters
         final CmdLineParser.Option rateOption = parser.addIntegerOption('r', "rate");
         final CmdLineParser.Option countOption = parser.addIntegerOption('c', "count");
-        final CmdLineParser.Option recordTimesOption = parser.addBooleanOption('q', "time");
-        final CmdLineParser.Option lazyDeserializeOption = parser.addBooleanOption('k', "lazyDeserialize");
-        final CmdLineParser.Option useStoreReaderOption = parser.addBooleanOption('u', "useStoreReader");
+        final CmdLineParser.Option warmupTimeOption = parser.addIntegerOption('t', "warmupTime");
+
+        // latency writer related options
+        final CmdLineParser.Option noLatencyWritesOption = parser.addBooleanOption('a', "noLatencyWrites");
+        final CmdLineParser.Option printIntervalStatsOption = parser.addBooleanOption('b', "printIntervalStats");
+
+        // affinity related options
         final CmdLineParser.Option affinityOption = parser.addStringOption('j', "affinity");
+        
+        // help
         final CmdLineParser.Option helpOption = parser.addBooleanOption('h', "help");
         try {
             parser.parse(args);
             if (!((Boolean)parser.getOptionValue(helpOption, false))) {
+                // affinity
                 final String affinityStr = (String)parser.getOptionValue(affinityOption , null);
                 if (affinityStr != null) {
                     System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
                     UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(affinityStr));
                 }
 
+                // prepare logger properties
                 final Properties props = new Properties();
                 props.setProperty(RogLog.PROP_DETACHED, ((Boolean)parser.getOptionValue(detachedOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(queueDepthOption, 1024)));
@@ -437,35 +400,52 @@ final public class StoreLogger {
                 props.setProperty(RogLog.PROP_PAGE_SIZE, String.valueOf(parser.getOptionValue(pageSizeOption, 4096)));
                 props.setProperty(RogLog.PROP_FLUSH_USING_MAPPED_MEMORY, ((Boolean)parser.getOptionValue(flushUsingMappedMemoryOption, false)) ? "true" : "false");
 
+                // dump parameters
                 System.out.println("");
                 System.out.println("***** Parameters");
+                System.out.println("***** ...logMode=" + props.getProperty(RogLog.PROP_LOG_MODE));
+                System.out.println("***** ...initialLogLength=" + props.getProperty(RogLog.PROP_INITIAL_LOG_LENGTH));
+                System.out.println("***** ...zeroOutInitial=" + props.getProperty(RogLog.PROP_ZERO_OUT_INITIAL));
+                System.out.println("*****");
+                final int numPerCommit = (Integer)parser.getOptionValue(numPerCommitOption, 1);
+                System.out.println("***** ...numPerCommit=" + numPerCommit);
+                System.out.println("***** ...flushUsingMappedMemory=" + props.getProperty(RogLog.PROP_FLUSH_USING_MAPPED_MEMORY));
+                System.out.println("***** ...flushOnCommit=" + props.getProperty(RogLog.PROP_FLUSH_ON_COMMIT));
+                final boolean syncOnCommit = ((Boolean)parser.getOptionValue(syncOnCommitOption, false));
+                System.out.println("***** ...syncOnCommit=" + syncOnCommit);
+                System.out.println("*****");
                 System.out.println("***** ...detached=" + props.getProperty(RogLog.PROP_DETACHED));
                 System.out.println("***** ......queueDepth=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_DEPTH));
                 System.out.println("***** ......publisherClaimStrategy=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_OFFER_STRATEGY));
                 System.out.println("***** ......writerWaitStrategy=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_WAIT_STRATEGY));
                 System.out.println("***** ......writerAffinity=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_DRAINER_CPU_AFFINITIZATION_MASK));
-                System.out.println("***** ...flushOnCommit=" + props.getProperty(RogLog.PROP_FLUSH_ON_COMMIT));
-                System.out.println("***** ...logMode=" + props.getProperty(RogLog.PROP_LOG_MODE));
-                System.out.println("***** ...initialLogLength=" + props.getProperty(RogLog.PROP_INITIAL_LOG_LENGTH));
-                System.out.println("***** ...zeroOutInitial=" + props.getProperty(RogLog.PROP_ZERO_OUT_INITIAL));
+                System.out.println("*****");
                 System.out.println("***** ...pageSize=" + props.getProperty(RogLog.PROP_PAGE_SIZE));
-                System.out.println("***** ...flushUsingMappedMemory=" + props.getProperty(RogLog.PROP_FLUSH_USING_MAPPED_MEMORY));
-                final int count = (Integer)parser.getOptionValue(countOption, 10000000);
-                System.out.println("***** ...count=" + count);
-                final int rate = (Integer)parser.getOptionValue(rateOption, -1);
-                System.out.println("***** ...rate=" + rate);
                 final boolean lazyDeserialize = ((Boolean)parser.getOptionValue(lazyDeserializeOption, true));
                 System.out.println("***** ...lazyDeserialize=" + lazyDeserialize);
-                final boolean useStoreReader = ((Boolean)parser.getOptionValue(useStoreReaderOption, false));
-                System.out.println("***** ...useStoreReader=" + useStoreReader);
-                final int numPerCommit = (Integer)parser.getOptionValue(numPerCommitOption, 1);
-                System.out.println("***** ...numPerCommit=" + numPerCommit);
-                final boolean syncOnCommit = ((Boolean)parser.getOptionValue(syncOnCommitOption, false));
-                System.out.println("***** ...syncOnCommit=" + syncOnCommit);
-                final boolean recordTimes = ((Boolean)parser.getOptionValue(recordTimesOption, false));
-                System.out.println("***** ...recordTimes=" + recordTimes);
+                System.out.println("*****");
+                final int rate = (Integer)parser.getOptionValue(rateOption, 500000);
+                System.out.println("***** ...rate=" + rate);
+                final int count = (Integer)parser.getOptionValue(countOption, 15000000);
+                System.out.println("***** ...count=" + count);
+                final int warmupTime = (Integer)parser.getOptionValue(warmupTimeOption, 2);
+                System.out.println("***** ...warmupTime=" + warmupTime);
+                System.out.println("*****");
+                final boolean noLatencyWrites = ((Boolean)parser.getOptionValue(noLatencyWritesOption, false));
+                System.out.println("***** ...noLatencyWrites=" + noLatencyWrites);
+                final boolean printIntervalStats = ((Boolean)parser.getOptionValue(printIntervalStatsOption, false));
+                System.out.println("***** ...printIntervalStats=" + printIntervalStats);
+                System.out.println("*****");
+                System.out.println("***** ...affinity=" + affinityStr);
                 System.out.println("");
-                new StoreLogger(props).run(count, rate, lazyDeserialize, numPerCommit, syncOnCommit, useStoreReader, recordTimes);
+                new StoreLogger(props).run(count,
+                                           warmupTime, 
+                                           rate, 
+                                           lazyDeserialize, 
+                                           numPerCommit, 
+                                           syncOnCommit, 
+                                           noLatencyWrites,
+                                           printIntervalStats);
             }
             else {
                 printUsage();

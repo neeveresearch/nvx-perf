@@ -192,7 +192,7 @@ final public class StreamingSender extends AnnotatedCommand {
             }
         }
         final long stop = System.currentTimeMillis();
-        lw.stop();
+        lw.close();
 
         // close link
         pep.close((short)-1);

@@ -39,9 +39,6 @@ import com.neeve.util.UtlTime;
 
 @AnnotatedCommand.Command(keywords = "Sender", description = "A sender to benchmark SMA Performance")
 final public class Sender extends Common implements IEventHandler {
-    @Option(shortForm = 'm', longForm = "messageSize", required = false, defaultValue = "256", description = "the message data size.")
-    private int _messageSize;
-
     @Option(shortForm = 'p', longForm = "dontPopulateMessage", description = "whether to not populate outbound messages with full content i.e. only timestamp is sent")
     boolean _dontPopulate;
 
@@ -71,7 +68,6 @@ final public class Sender extends Common implements IEventHandler {
         System.out.println("[Sender] Bus Descriptor......" + _descriptor);
         System.out.println("[Sender] Test Count.........." + dfmt.format(_testCount));
         System.out.println("[Sender] Test Rate..........." + dfmt.format(_testRate));
-        System.out.println("[Sender] Message Size........" + _messageSize);
         System.out.println("[Sender] Message Encoding...." + _encoding);
         System.out.println("[Sender] Populate Message...." + !_dontPopulate);
         System.out.println("[Sender] Channel Key........." + _channelKey);
@@ -119,7 +115,7 @@ final public class Sender extends Common implements IEventHandler {
             }
         }
         final long stop = System.currentTimeMillis();
-        lw.stop();
+        lw.close();
 
         // close bus connection
         _binding.close();
