@@ -23,11 +23,6 @@ package com.neeve.perf.persist;
 
 import jargs.gnu.CmdLineParser;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.Properties;
 
@@ -61,6 +56,10 @@ final public class StoreLogger {
         StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.CarFactory());
     }
 
+    final private IRogMessage createMessage() {
+        return (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+    }
+
     final private void prepareCommitEntry(final StoreCommitEntry commitEntry, final IRogMessage message, final boolean commitEnd) { 
         commitEntry.init(IStoreBinding.Operation.Remove,
                          message.getId(),
@@ -89,12 +88,19 @@ final public class StoreLogger {
                              final long nanoTimeOverhead,
                              final boolean noLatencyWrites,
                              final boolean printIntervalStats) throws Exception {
-        System.out.println("Writing...");
-        final StoreCommitEntry commitEntry = StoreCommitEntry.create();
+        // create and populate the source messsage
         final IRogMessage message = (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+
+        // create the commit entry used to log the message to the store log
+        final StoreCommitEntry commitEntry = StoreCommitEntry.create();
+
+        // create latency writers
         final LatencyWriter prepTimes = new LatencyWriter("prep", noLatencyWrites ? null : "latencies.prep.bin", true, printIntervalStats, false);
         final LatencyWriter writeTimes = new LatencyWriter("write", noLatencyWrites ? null : "latencies.write.bin", false, printIntervalStats, false);
         final LatencyWriter totalTimes = new LatencyWriter("total", noLatencyWrites ? null : "latencies.total.bin", false, printIntervalStats, false);
+
+        // write
+        System.out.println("Writing...");
         int i = 1;
         final long start = System.nanoTime();
         final long nanosPerMsg = rate > 0 ? (1000000000l / rate) : 0;
@@ -117,16 +123,16 @@ final public class StoreLogger {
                 prepareCommitEntry(commitEntry, message, commitEnd);
                 final long t1 = System.nanoTime();
                 final int prepTime = (int)(t1 - t0 - nanoTimeOverhead);
-                prepTimes.write(prepTime);
 
                 // write commit entry
                 // ...clearing time of the commit entry needs to be included in write time)
                 _logger.writeCommitEntry(commitEntry, true, commitEnd && syncOnCommit);
                 clearCommitEntry(commitEntry);
                 final int writeTime = (int)(System.nanoTime() - t1 - nanoTimeOverhead);
-                writeTimes.write(writeTime);
 
-                // record total time
+                // record times
+                prepTimes.write(prepTime);
+                writeTimes.write(writeTime);
                 totalTimes.write(prepTime + writeTime);
 
                 // update counters
@@ -138,10 +144,13 @@ final public class StoreLogger {
             }
             if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
                 System.out.println("Warm up complete.");
-                postWarmupStart = current;
+                postWarmupStart = System.nanoTime();
                 warmupCompleted = true;
             }
         }
+        final long stop = System.nanoTime();
+
+        // finish latency writing
         prepTimes.stop();
         writeTimes.stop();
         totalTimes.stop();
@@ -151,19 +160,26 @@ final public class StoreLogger {
         prepTimes.finish();
 
         // throughput stats
-        final long current = System.nanoTime();
-        final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
-        System.out.println("Wrote " + _dfmt.format(postWarmupCount) + " @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
+        final int overallRate = (int)((postWarmupCount * 1000000000L) / (stop - postWarmupStart));
+        System.out.println("Wrote " + _dfmt.format(postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
         System.out.println("Write complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
     }
 
-    final private void readUsingLogReader(final int count, final boolean lazyDeserialize) throws Exception {
+    final private void readUsingLogReader(final int count, final int warmupTime, final boolean lazyDeserialize) throws Exception {
         // get reader
         System.out.println("Reading using log reader...");
         long ts = System.nanoTime();
         final RogLogReader reader = _logger.createReader();
         reader.setLazyDeserialization(lazyDeserialize);
         System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
+
+        // compute stats
+        ts = System.nanoTime();
+        final RogLog.Stats stats = reader.computeStats();
+        System.out.println(stats.getHeaderRow());
+        System.out.println(stats.toString());
+        System.out.println("Computed stats in " + _dfmt.format((((System.nanoTime() - ts)) / 1000l)) + " us");
+        reader.rewind();
 
         // read
         int i = 0;
@@ -180,7 +196,7 @@ final public class StoreLogger {
                     postWarmupCount++;
                 }
                 final long current = System.nanoTime();
-                if (!warmupCompleted && current - start > 5000000000L) { // 5 second warmup
+                if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
                     System.out.println("Warm up complete.");
                     postWarmupStart = current;
                     warmupCompleted = true;
@@ -189,10 +205,10 @@ final public class StoreLogger {
         }
         final long current = System.nanoTime();
         final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
-        System.out.println("Read " + _dfmt.format(postWarmupCount) + " @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
+        System.out.println("Read " + _dfmt.format(postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
     }
 
-    final private void readUsingStoreReader(final int count) throws Exception {
+    final private void readUsingStoreReader(final int count, final int warmupTime) throws Exception {
         // get reader
         System.out.println("Reading using store reader...");
         long ts = System.nanoTime();
@@ -214,7 +230,7 @@ final public class StoreLogger {
                     postWarmupCount++;
                 }
                 final long current = System.nanoTime();
-                if (!warmupCompleted && current - start > 5000000000L) { // 5 second warmup
+                if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
                     System.out.println("Warm up complete.");
                     postWarmupStart = current;
                     warmupCompleted = true;
@@ -250,14 +266,7 @@ final public class StoreLogger {
 
             // open logger
             System.out.println("Opening logger...");
-            try {
-                _logger.open();
-            }
-            catch (Exception e) {
-                System.out.println("Failed to open the logger [" + e.toString() + "]...");
-                e.printStackTrace();
-                return;
-            }
+            _logger.open();
 
             // write
             write(count, warmupTime, rate, numPerCommit, syncOnCommit, nanoTimeOverhead, noLatencyWrites, printIntervalStats);
@@ -267,9 +276,9 @@ final public class StoreLogger {
             _logger.flush(syncOnCommit);
 
             // read
-            readUsingLogReader(count, lazyDeserialize);
+            readUsingLogReader(count, warmupTime, lazyDeserialize);
             System.out.println("");
-            readUsingStoreReader(count);
+            readUsingStoreReader(count, warmupTime);
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -340,6 +349,7 @@ final public class StoreLogger {
     // entry point
     final public static void main(final String[] args) throws Exception {
         final CmdLineParser parser = new CmdLineParser();
+
         // log file related options
         final CmdLineParser.Option logModeOption = parser.addStringOption('o', "logMode");
         final CmdLineParser.Option initialLogLengthOption = parser.addIntegerOption('i', "initialLogLength");
@@ -363,9 +373,9 @@ final public class StoreLogger {
         final CmdLineParser.Option lazyDeserializeOption = parser.addBooleanOption('k', "lazyDeserialize");
 
         // test parameters
-        final CmdLineParser.Option rateOption = parser.addIntegerOption('r', "rate");
         final CmdLineParser.Option countOption = parser.addIntegerOption('c', "count");
         final CmdLineParser.Option warmupTimeOption = parser.addIntegerOption('t', "warmupTime");
+        final CmdLineParser.Option rateOption = parser.addIntegerOption('r', "rate");
 
         // latency writer related options
         final CmdLineParser.Option noLatencyWritesOption = parser.addBooleanOption('a', "noLatencyWrites");
@@ -379,7 +389,7 @@ final public class StoreLogger {
         try {
             parser.parse(args);
             if (!((Boolean)parser.getOptionValue(helpOption, false))) {
-                // affinity
+                // affinitize
                 final String affinityStr = (String)parser.getOptionValue(affinityOption , null);
                 if (affinityStr != null) {
                     System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
