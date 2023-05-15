@@ -398,17 +398,17 @@ final public class StoreLogger {
 
                 // prepare logger properties
                 final Properties props = new Properties();
+                props.setProperty(RogLog.PROP_LOG_MODE, (String)parser.getOptionValue(logModeOption, "rw"));
+                props.setProperty(RogLog.PROP_INITIAL_LOG_LENGTH, String.valueOf(parser.getOptionValue(initialLogLengthOption, 1)));
+                props.setProperty(RogLog.PROP_ZERO_OUT_INITIAL, ((Boolean)parser.getOptionValue(zeroOutInitialOption, false)) ? "true" : "false");
+                props.setProperty(RogLog.PROP_FLUSH_USING_MAPPED_MEMORY, ((Boolean)parser.getOptionValue(flushUsingMappedMemoryOption, false)) ? "true" : "false");
+                props.setProperty(RogLog.PROP_FLUSH_ON_COMMIT, ((Boolean)parser.getOptionValue(flushOnCommitOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_DETACHED, ((Boolean)parser.getOptionValue(detachedOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(queueDepthOption, 1024)));
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_OFFER_STRATEGY, (String)parser.getOptionValue(publisherClaimStrategyOption, "SingleThreaded"));
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_WAIT_STRATEGY, (String)parser.getOptionValue(writerWaitStrategyOption, "Yielding"));
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_DRAINER_CPU_AFFINITIZATION_MASK, (String)parser.getOptionValue(writerAffinityOption, "[0]"));
-                props.setProperty(RogLog.PROP_FLUSH_ON_COMMIT, ((Boolean)parser.getOptionValue(flushOnCommitOption, false)) ? "true" : "false");
-                props.setProperty(RogLog.PROP_LOG_MODE, (String)parser.getOptionValue(logModeOption, "rw"));
-                props.setProperty(RogLog.PROP_INITIAL_LOG_LENGTH, String.valueOf(parser.getOptionValue(initialLogLengthOption, 1)));
-                props.setProperty(RogLog.PROP_ZERO_OUT_INITIAL, ((Boolean)parser.getOptionValue(zeroOutInitialOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_PAGE_SIZE, String.valueOf(parser.getOptionValue(pageSizeOption, 4096)));
-                props.setProperty(RogLog.PROP_FLUSH_USING_MAPPED_MEMORY, ((Boolean)parser.getOptionValue(flushUsingMappedMemoryOption, false)) ? "true" : "false");
 
                 // dump parameters
                 System.out.println("");
@@ -434,12 +434,12 @@ final public class StoreLogger {
                 final boolean lazyDeserialize = ((Boolean)parser.getOptionValue(lazyDeserializeOption, true));
                 System.out.println("***** ...lazyDeserialize=" + lazyDeserialize);
                 System.out.println("*****");
-                final int rate = (Integer)parser.getOptionValue(rateOption, 500000);
-                System.out.println("***** ...rate=" + rate);
                 final int count = (Integer)parser.getOptionValue(countOption, 15000000);
                 System.out.println("***** ...count=" + count);
                 final int warmupTime = (Integer)parser.getOptionValue(warmupTimeOption, 2);
                 System.out.println("***** ...warmupTime=" + warmupTime);
+                final int rate = (Integer)parser.getOptionValue(rateOption, 500000);
+                System.out.println("***** ...rate=" + rate);
                 System.out.println("*****");
                 final boolean noLatencyWrites = ((Boolean)parser.getOptionValue(noLatencyWritesOption, false));
                 System.out.println("***** ...noLatencyWrites=" + noLatencyWrites);
