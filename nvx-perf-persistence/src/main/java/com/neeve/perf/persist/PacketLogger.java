@@ -30,7 +30,7 @@ import com.neeve.ods.IStoreBinding;
 import com.neeve.ods.StoreBinding;
 import com.neeve.ods.StoreCommitEntry;
 import com.neeve.perf.common.LatencyWriter;
-import com.neeve.perf.serialization.CarFactory;
+import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
 import com.neeve.pkt.log.PktRecoveryLog;
@@ -115,7 +115,7 @@ final public class PacketLogger {
     }
 
     final private IRogMessage createMessage() {
-        return (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+        return (IRogMessage)new MessageFactory("rumi.xbuf2").createCar(true);
     }
 
     final private PktPacket populatePacket(final IRogMessage message, final StoreCommitEntry commitEntry) {

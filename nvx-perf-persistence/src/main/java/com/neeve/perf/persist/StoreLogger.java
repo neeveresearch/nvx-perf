@@ -33,7 +33,7 @@ import com.neeve.ods.StoreBinding;
 import com.neeve.ods.StoreCommitEntry;
 import com.neeve.ods.StoreObjectFactoryRegistry;
 import com.neeve.perf.common.LatencyWriter;
-import com.neeve.perf.serialization.CarFactory;
+import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
 import com.neeve.pkt.types.PktBodyTypesBase;
@@ -53,11 +53,11 @@ final public class StoreLogger {
     }
 
     final private void registerFactories() throws Exception {
-        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.CarFactory());
+        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.MessageFactory());
     }
 
     final private IRogMessage createMessage() {
-        return (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+        return (IRogMessage)new MessageFactory("rumi.xbuf2").createCar(true);
     }
 
     final private void prepareCommitEntry(final StoreCommitEntry commitEntry, final IRogMessage message, final boolean commitEnd) { 
@@ -89,7 +89,7 @@ final public class StoreLogger {
                              final boolean noLatencyWrites,
                              final boolean printIntervalStats) throws Exception {
         // create and populate the source messsage
-        final IRogMessage message = (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+        final IRogMessage message = (IRogMessage)new MessageFactory("rumi.xbuf2").createCar(true);
 
         // create the commit entry used to log the message to the store log
         final StoreCommitEntry commitEntry = StoreCommitEntry.create();

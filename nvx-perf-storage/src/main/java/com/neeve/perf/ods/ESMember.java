@@ -33,7 +33,7 @@ import java.util.Properties;
 import com.neeve.io.IOBuffer;
 import com.neeve.ods.StoreBindingFactory;
 import com.neeve.ods.StoreObjectFactoryRegistry;
-import com.neeve.perf.serialization.CarFactory;
+import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.rog.IRogMessage;
 import com.neeve.rog.log.RogLog;
 import com.neeve.rog.log.RogLogReader;
@@ -41,15 +41,15 @@ import com.neeve.util.UtlConstants;
 import com.neeve.util.UtlThread;
 
 final public class ESMember extends Common {
-    final private CarFactory carFactory;
+    final private MessageFactory carFactory;
 
     static {
-        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.CarFactory());
+        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.MessageFactory());
     }
 
     ESMember(final Properties persisterProps) throws Exception {
         super(true, persisterProps, false, null, StoreBindingFactory.FLG_EVENT_SOURCING);
-        carFactory = new CarFactory("xbuf2");
+        carFactory = new MessageFactory("xbuf2");
     }
 
     final private IRogMessage createMessage() {

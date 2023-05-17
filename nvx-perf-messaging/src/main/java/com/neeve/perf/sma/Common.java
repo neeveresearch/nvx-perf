@@ -72,7 +72,7 @@ abstract class Common extends AnnotatedCommand implements IEventHandler {
             final MessageChannelDescriptor channelDescriptor = MessageChannelDescriptor.create("default", busDescriptor);
             busDescriptor.addChannel(channelDescriptor);
             busDescriptor.save(ConfigRepositoryFactory.getInstance().getDefaultRepository(), null);
-            MessageViewFactoryRegistry.getInstance().registerMessageViewFactory(new com.neeve.perf.serialization.rumi.xbuf2.CarFactory());
+            MessageViewFactoryRegistry.getInstance().registerMessageViewFactory(new com.neeve.perf.serialization.rumi.xbuf2.MessageFactory());
         }
         catch (SmaException e) {
             throw new RuntimeException(e);

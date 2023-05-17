@@ -33,7 +33,7 @@ import com.neeve.ods.StoreBinding;
 import com.neeve.ods.StoreCommitEntry;
 import com.neeve.ods.StoreObjectFactoryRegistry;
 import com.neeve.perf.common.LatencyWriter;
-import com.neeve.perf.serialization.CarFactory;
+import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
 import com.neeve.pkt.types.PktBodyTypesBase;
@@ -54,7 +54,7 @@ final public class MessageLogger {
     }
 
     final private IRogMessage createMessage() {
-        return (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+        return (IRogMessage)new MessageFactory("rumi.xbuf2").createCar(true);
     }
 
     final private void write(final int count,
@@ -66,7 +66,7 @@ final public class MessageLogger {
                              final boolean noLatencyWrites,
                              final boolean printIntervalStats) throws Exception {
         // create and populate the source messsage
-        final IRogMessage message = (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
+        final IRogMessage message = (IRogMessage)new MessageFactory("rumi.xbuf2").createCar(true);
 
         // create latency writer
         final LatencyWriter lw = new LatencyWriter("write", noLatencyWrites ? null : "latencies.write.bin", printIntervalStats);

@@ -28,7 +28,7 @@ import com.neeve.event.Event;
 import com.neeve.event.IEventHandler;
 import com.neeve.perf.common.LatencyWriter;
 import com.neeve.perf.common.SystemProperties;
-import com.neeve.perf.serialization.CarFactory;
+import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.sma.MessageChannel;
 import com.neeve.sma.MessageView;
 import com.neeve.sma.SmaException;
@@ -78,7 +78,7 @@ final public class Sender extends Common implements IEventHandler {
         connect(false);
 
         // create the message
-        final MessageView message = new CarFactory(_encoding).createCar(!_dontPopulate);
+        final MessageView message = new MessageFactory(_encoding).createCar(!_dontPopulate);
 
         // calculate UtlTime.now() overhead
         System.out.println("[Sender] Calculating UtlTime.now() overhead...");

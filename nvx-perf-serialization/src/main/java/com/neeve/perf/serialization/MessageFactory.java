@@ -23,10 +23,10 @@ package com.neeve.perf.serialization;
 
 import com.neeve.sma.MessageView;
 
-final public class CarFactory {
+final public class MessageFactory {
     final private Provider<?> provider;
 
-    public CarFactory(final String providerStr) {
+    public MessageFactory(final String providerStr) {
         provider = Driver.getProvider(providerStr);
     }
 

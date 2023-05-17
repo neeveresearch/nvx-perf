@@ -22,9 +22,9 @@
     limitations under the License.
 
 -->
-<model xmlns="http://www.neeveresearch.com/schema/x-adml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<model xmlns="http://www.neeveresearch.com/schema/x-adml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" defaultFactoryId="1">
     <factories>
-        <factory name="CarFactory" id="1"/>
+        <factory name="MessageFactory" id="1"/>
     </factories>
 
     <enumerations>
@@ -47,7 +47,36 @@
     </enumerations>
 
     <messages>
-        <message name="Car" id="5" factoryid="1">
+        <message name="Car" id="1">
+            <inline ref="CarData"/>
+        </message>
+    </messages>
+
+    <entities>
+        <entity name="Engine" id="101" asEmbedded="true">
+            <field name="capacity" type="Short" id="1"/>
+            <field name="numCylinders" type="Byte" id="2"/>
+            <field name="maxRpm" type="Short" id="3"/>
+            <field name="manufacturerCode" type="String" length="3" id="4"/>
+            <field name="fuel" type="String" length="6" id="5"/>
+        </entity>
+
+        <entity name="FuelFigure" id="102" asEmbedded="true">
+            <field name="speed" type="Short" id="1"/>
+            <field name="mpg" type="Float" id="2"/>
+        </entity>
+
+        <entity name="PerformanceFigure" id="103" asEmbedded="true">
+            <field name="octaneRating" type="Byte" id="1"/>
+            <field name="acceleration" type="Acceleration[]" id="2"/>
+        </entity>
+
+        <entity name="Acceleration" id="104" asEmbedded="true">
+            <field name="mph" type="Short" id="1"/>
+            <field name="seconds" type="Float" id="2"/>
+        </entity>
+
+        <entity name="CarData" id="105" asEmbedded="true">
             <field name="timestamp" type="Long" id="1"/>
             <field name="serialNumber" type="Integer" id="2"/>
             <field name="modelYear" type="Short" id="3"/>
@@ -61,31 +90,6 @@
             <field name="performanceFigure" type="PerformanceFigure[]" id="11"/>
             <field name="manufacturer" type="String" id="12"/>
             <field name="model" type="String" id="13"/>
-        </message>
-    </messages>
-
-    <entities>
-        <entity name="Engine" id="1" factoryid="1" asEmbedded="true">
-            <field name="capacity" type="Short" id="1"/>
-            <field name="numCylinders" type="Byte" id="2"/>
-            <field name="maxRpm" type="Short" id="3"/>
-            <field name="manufacturerCode" type="String" length="3" id="4"/>
-            <field name="fuel" type="String" length="6" id="5"/>
-        </entity>
-
-        <entity name="FuelFigure" id="2" factoryid="1" asEmbedded="true">
-            <field name="speed" type="Short" id="1"/>
-            <field name="mpg" type="Float" id="2"/>
-        </entity>
-
-        <entity name="PerformanceFigure" id="3" factoryid="1" asEmbedded="true">
-            <field name="octaneRating" type="Byte" id="1"/>
-            <field name="acceleration" type="Acceleration[]" id="2"/>
-        </entity>
-
-        <entity name="Acceleration" id="4" factoryid="1" asEmbedded="true">
-            <field name="mph" type="Short" id="1"/>
-            <field name="seconds" type="Float" id="2"/>
         </entity>
     </entities>
 </model>
