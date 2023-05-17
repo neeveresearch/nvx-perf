@@ -38,46 +38,23 @@ import com.neeve.pkt.PktFactory;
 import com.neeve.pkt.PktPacket;
 import com.neeve.pkt.types.PktBodyTypesBase;
 import com.neeve.rog.IRogMessage;
+import com.neeve.rog.IRogMessageLogger;
 import com.neeve.rog.log.RogLog;
 import com.neeve.rog.log.RogLogReader;
 import com.neeve.util.UtlConstants;
 import com.neeve.util.UtlThread;
 
-final public class StoreLogger {
-    final private RogLog _logger;
+final public class MessageLogger {
+    final private IRogMessageLogger _logger;
     final private DecimalFormat _dfmt;
 
-    StoreLogger(final Properties props) throws Exception {
+    MessageLogger(final Properties props) throws Exception {
         _dfmt = new DecimalFormat("#,###");
         _logger = RogLog.create("perf", props);
     }
 
-    final private void registerFactories() throws Exception {
-        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.CarFactory());
-    }
-
     final private IRogMessage createMessage() {
         return (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
-    }
-
-    final private void prepareCommitEntry(final StoreCommitEntry commitEntry, final IRogMessage message, final boolean commitEnd) { 
-        commitEntry.init(IStoreBinding.Operation.Remove,
-                         message.getId(),
-                         message.getOfid(),
-                         message.getType(),
-                         0l,
-                         0l,
-                         0l,
-                         message,
-                         message.serialize(),
-                         message.getContentEncodingType(),
-                         false,
-                         commitEnd);
-    }
-
-    final private void clearCommitEntry(final StoreCommitEntry commitEntry) {
-        commitEntry.serializedObject.dispose();
-        commitEntry.fin();
     }
 
     final private void write(final int count,
@@ -91,13 +68,8 @@ final public class StoreLogger {
         // create and populate the source messsage
         final IRogMessage message = (IRogMessage)new CarFactory("rumi.xbuf2").createCar(true);
 
-        // create the commit entry used to log the message to the store log
-        final StoreCommitEntry commitEntry = StoreCommitEntry.create();
-
-        // create latency writers
-        final LatencyWriter prepTimes = new LatencyWriter("prep", noLatencyWrites ? null : "latencies.prep.bin", true, printIntervalStats, false);
-        final LatencyWriter writeTimes = new LatencyWriter("write", noLatencyWrites ? null : "latencies.write.bin", false, printIntervalStats, false);
-        final LatencyWriter totalTimes = new LatencyWriter("total", noLatencyWrites ? null : "latencies.total.bin", false, printIntervalStats, false);
+        // create latency writer
+        final LatencyWriter lw = new LatencyWriter("write", noLatencyWrites ? null : "latencies.write.bin", printIntervalStats);
 
         // write
         System.out.println("Writing...");
@@ -108,9 +80,7 @@ final public class StoreLogger {
         boolean warmupCompleted = false;
         int postWarmupCount = 0;
         long postWarmupStart = 0;
-        prepTimes.start(rate, count);
-        writeTimes.start(rate, count);
-        totalTimes.start(rate, count);
+        lw.start(rate, count);
         while (i < count) {
             final long current = System.nanoTime();
             if (current >= next) {
@@ -118,22 +88,16 @@ final public class StoreLogger {
                 final boolean commitStart = numPerCommit == 1 || ((i+1) % numPerCommit) == 1;
                 final boolean commitEnd = numPerCommit == 1 || ((i+1) % numPerCommit) == 0;
 
-                // prepare the commit entry for write
+                // write 
                 final long t0 = System.nanoTime();
-                prepareCommitEntry(commitEntry, message, commitEnd);
-                final long t1 = System.nanoTime();
-                final int prepTime = (int)(t1 - t0 - nanoTimeOverhead);
-
-                // write commit entry
-                // ...clearing time of the commit entry needs to be included in write time)
-                _logger.writeCommitEntry(commitEntry, true, commitEnd && syncOnCommit);
-                clearCommitEntry(commitEntry);
-                final int writeTime = (int)(System.nanoTime() - t1 - nanoTimeOverhead);
+                _logger.log(message, commitEnd);
+                if (commitEnd && syncOnCommit) {
+                    _logger.flush(true);
+                }
+                final int writeTime = (int)(System.nanoTime() - t0 - nanoTimeOverhead);
 
                 // record times
-                prepTimes.write(prepTime);
-                writeTimes.write(writeTime);
-                totalTimes.write(prepTime + writeTime);
+                lw.write(writeTime);
 
                 // update counters
                 next += nanosPerMsg;
@@ -151,101 +115,17 @@ final public class StoreLogger {
         final long stop = System.nanoTime();
 
         // finish latency writing
-        prepTimes.stop();
-        writeTimes.stop();
-        totalTimes.stop();
-        prepTimes.close(false);
-        writeTimes.close(false);
-        totalTimes.close(false);
-        prepTimes.finish();
+        lw.close();
 
         // throughput stats
         final int overallRate = (int)((postWarmupCount * 1000000000L) / (stop - postWarmupStart));
         System.out.println("Wrote " + _dfmt.format(postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
-        System.out.println("Write complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
-    }
-
-    final private void readUsingLogReader(final int count, final int warmupTime, final boolean lazyDeserialize) throws Exception {
-        // get reader
-        System.out.println("Reading using log reader...");
-        long ts = System.nanoTime();
-        final RogLogReader reader = _logger.createReader();
-        reader.setLazyDeserialization(lazyDeserialize);
-        System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
-
-        // compute stats
-        ts = System.nanoTime();
-        final RogLog.Stats stats = reader.computeStats();
-        System.out.println(stats.getHeaderRow());
-        System.out.println(stats.toString());
-        System.out.println("Computed stats in " + _dfmt.format((((System.nanoTime() - ts)) / 1000l)) + " us");
-        reader.rewind();
-
-        // read
-        int i = 0;
-        final long start = System.nanoTime();
-        boolean warmupCompleted = false;
-        int postWarmupCount = 0;
-        long postWarmupStart = 0;
-        RogLog.Entry entry;
-        for (int j = 0; j < count; j++) {
-            if ((entry = reader.next()) != null) {
-                entry.dispose();
-                i++;
-                if (warmupCompleted) {
-                    postWarmupCount++;
-                }
-                final long current = System.nanoTime();
-                if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
-                    System.out.println("Warm up complete.");
-                    postWarmupStart = current;
-                    warmupCompleted = true;
-                }
-            }
-        }
-        final long current = System.nanoTime();
-        final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
-        System.out.println("Read " + _dfmt.format(postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
-    }
-
-    final private void readUsingStoreReader(final int count, final int warmupTime) throws Exception {
-        // get reader
-        System.out.println("Reading using store reader...");
-        long ts = System.nanoTime();
-        final IStoreReader.IterativeReader reader = _logger.iterativeReader(0);
-        System.out.println("Created reader in " + (((System.nanoTime() - ts)) / 1000l) + " us");
-
-        // read
-        int i = 0;
-        final long start = System.nanoTime();
-        boolean warmupCompleted = false;
-        int postWarmupCount = 0;
-        long postWarmupStart = 0;
-        StoreCommitEntry entry;
-        for (int j = 0; j < count; j++) {
-            if ((entry = reader.next()) != null) {
-                clearCommitEntry(entry);
-                i++;
-                if (warmupCompleted) {
-                    postWarmupCount++;
-                }
-                final long current = System.nanoTime();
-                if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
-                    System.out.println("Warm up complete.");
-                    postWarmupStart = current;
-                    warmupCompleted = true;
-                }
-            }
-        }
-        final long current = System.nanoTime();
-        final int overallRate = (int)((postWarmupCount * 1000000000L) / (current - postWarmupStart));
-        System.out.println("Read " + _dfmt.format(postWarmupCount) + " @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
+        System.out.println("Write complete (run rumi-reporter on latencies.write.bin to calculate latency stats)");
     }
 
     final private void run(final int count,
                            final int warmupTime,
                            final int rate,
-                           final boolean lazyDeserialize,
                            final int numPerCommit,
                            final boolean syncOnCommit,
                            final boolean noLatencyWrites,
@@ -259,10 +139,6 @@ final public class StoreLogger {
                 System.nanoTime();
             }
             nanoTimeOverhead = (System.nanoTime() - start) / 100000000;
-
-            // register factories
-            System.out.println("Registering factories...");
-            registerFactories();
 
             // open logger
             System.out.println("Opening logger...");
@@ -279,13 +155,11 @@ final public class StoreLogger {
                   printIntervalStats);
 
             // flush
-            System.out.println("");
             _logger.flush(syncOnCommit);
 
-            // read
-            readUsingLogReader(count, warmupTime, lazyDeserialize);
-            System.out.println("");
-            readUsingStoreReader(count, warmupTime);
+            // Message logger does not have a native reader
+            System.out.println("Message logger does not support a reader. Refer to StoreLogger for message log read performance");
+
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -297,8 +171,10 @@ final public class StoreLogger {
     }
 
     private static void printUsage() {
-        System.err.println("Usage StoreLogger");
+        System.err.println("Usage MessageLogger");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
+        System.err.println(" [{-k, --logLocation} the directory where to create the log]");
+        System.err.println("   Specifies the directory where the log should be created (default=\".\")");
         System.err.println(" [{-o, --logMode} the transaction log open mode]");
         System.err.println("   Specifies the mode to open the transaction log in, Valid values are 'rw', 'rws' and 'rwd' (default='rw')");
         System.err.println(" [{-i, --initialLogLength} the preallocated length of the transaction log]");
@@ -318,6 +194,8 @@ final public class StoreLogger {
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-d, --detached} detached]");
         System.err.println("   Switches on detached writes (concurrent write in a separate thread) on or off (default=false)");
+        System.err.println(" [{-e, --detachedMessageSerialization} detached message serialization]");
+        System.err.println("   Switches on serialization of message to be performed in the detached thread (default=false)");
         System.err.println(" [{-q, --queueDepth} queue depth for detached writes]");
         System.err.println("   Specifies the queue depth for detached writes (default=1024)");
         System.err.println("   <This option only applies to detached writes>");
@@ -330,11 +208,6 @@ final public class StoreLogger {
         System.err.println(" [{-x, --writerAffinity} disruptor writer thread affinity for detached writes]");
         System.err.println("   Specifies the disruptor writer thread affinity. (default=[0])");
         System.err.println("   <This option only applies to detached writes>");
-        System.err.println("--------------------------------------------------------------------------------------------------------------------");
-        System.err.println(" [{-p, --pageSize} specifies the disk subsystem page size]");
-        System.err.println("   Specifies (in bytes) the page size to use when reading/writing from/to disk (default=8192)");
-        System.err.println(" [{-k, --lazyDeserialize} do not invoke getObject() on read]");
-        System.err.println("   A value of false will cause Entry.getObject() to be invoked on read. A value of true will not (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-c, --count} number of messages to persist]");
         System.err.println("   Number of messages to persist (default=10,000,000)");
@@ -359,6 +232,7 @@ final public class StoreLogger {
         final CmdLineParser parser = new CmdLineParser();
 
         // log file related options
+        final CmdLineParser.Option logLocationOption = parser.addStringOption('k', "logLocation");
         final CmdLineParser.Option logModeOption = parser.addStringOption('o', "logMode");
         final CmdLineParser.Option initialLogLengthOption = parser.addIntegerOption('i', "initialLogLength");
         final CmdLineParser.Option zeroOutInitialOption = parser.addBooleanOption('z', "zeroOutInitial");
@@ -371,14 +245,11 @@ final public class StoreLogger {
 
         // detached write related options
         final CmdLineParser.Option detachedOption = parser.addBooleanOption('d', "detached");
+        final CmdLineParser.Option detachedMessageSerializationOption = parser.addBooleanOption('e', "detachedMessageSerialization");
         final CmdLineParser.Option queueDepthOption = parser.addIntegerOption('q', "queueDepth");
         final CmdLineParser.Option publisherClaimStrategyOption = parser.addStringOption('l', "publisherClaimStrategy");
         final CmdLineParser.Option writerWaitStrategyOption = parser.addStringOption('w', "writerWaitStrategy");
         final CmdLineParser.Option writerAffinityOption = parser.addStringOption('x', "writerAffinity");
-
-        // read related options
-        final CmdLineParser.Option pageSizeOption = parser.addIntegerOption('p', "pageSize");
-        final CmdLineParser.Option lazyDeserializeOption = parser.addBooleanOption('k', "lazyDeserialize");
 
         // test parameters
         final CmdLineParser.Option countOption = parser.addIntegerOption('c', "count");
@@ -406,17 +277,18 @@ final public class StoreLogger {
 
                 // prepare logger properties
                 final Properties props = new Properties();
+                props.setProperty(RogLog.PROP_STORE_ROOT, (String)parser.getOptionValue(logLocationOption, "."));
                 props.setProperty(RogLog.PROP_LOG_MODE, (String)parser.getOptionValue(logModeOption, "rw"));
                 props.setProperty(RogLog.PROP_INITIAL_LOG_LENGTH, String.valueOf(parser.getOptionValue(initialLogLengthOption, 1)));
                 props.setProperty(RogLog.PROP_ZERO_OUT_INITIAL, ((Boolean)parser.getOptionValue(zeroOutInitialOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_FLUSH_USING_MAPPED_MEMORY, ((Boolean)parser.getOptionValue(flushUsingMappedMemoryOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_FLUSH_ON_COMMIT, ((Boolean)parser.getOptionValue(flushOnCommitOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_DETACHED, ((Boolean)parser.getOptionValue(detachedOption, false)) ? "true" : "false");
+                props.setProperty(RogLog.PROP_DETACHED_MESSAGE_SERIALIZATION, ((Boolean)parser.getOptionValue(detachedMessageSerializationOption, false)) ? "true" : "false");
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(queueDepthOption, 1024)));
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_OFFER_STRATEGY, (String)parser.getOptionValue(publisherClaimStrategyOption, "SingleThreaded"));
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_WAIT_STRATEGY, (String)parser.getOptionValue(writerWaitStrategyOption, "Yielding"));
                 props.setProperty(RogLog.PROP_DETACHED_QUEUE_DRAINER_CPU_AFFINITIZATION_MASK, (String)parser.getOptionValue(writerAffinityOption, "[0]"));
-                props.setProperty(RogLog.PROP_PAGE_SIZE, String.valueOf(parser.getOptionValue(pageSizeOption, 4096)));
 
                 // dump parameters
                 System.out.println("");
@@ -433,14 +305,11 @@ final public class StoreLogger {
                 System.out.println("***** ...syncOnCommit=" + syncOnCommit);
                 System.out.println("*****");
                 System.out.println("***** ...detached=" + props.getProperty(RogLog.PROP_DETACHED));
+                System.out.println("***** ......detachedSerialization=" + props.getProperty(RogLog.PROP_DETACHED_MESSAGE_SERIALIZATION));
                 System.out.println("***** ......queueDepth=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_DEPTH));
                 System.out.println("***** ......publisherClaimStrategy=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_OFFER_STRATEGY));
                 System.out.println("***** ......writerWaitStrategy=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_WAIT_STRATEGY));
                 System.out.println("***** ......writerAffinity=" + props.getProperty(RogLog.PROP_DETACHED_QUEUE_DRAINER_CPU_AFFINITIZATION_MASK));
-                System.out.println("*****");
-                System.out.println("***** ...pageSize=" + props.getProperty(RogLog.PROP_PAGE_SIZE));
-                final boolean lazyDeserialize = ((Boolean)parser.getOptionValue(lazyDeserializeOption, true));
-                System.out.println("***** ...lazyDeserialize=" + lazyDeserialize);
                 System.out.println("*****");
                 final int count = (Integer)parser.getOptionValue(countOption, 15000000);
                 System.out.println("***** ...count=" + count);
@@ -456,10 +325,9 @@ final public class StoreLogger {
                 System.out.println("*****");
                 System.out.println("***** ...affinity=" + affinityStr);
                 System.out.println("");
-                new StoreLogger(props).run(count,
+                new MessageLogger(props).run(count,
                                            warmupTime, 
                                            rate, 
-                                           lazyDeserialize, 
                                            numPerCommit, 
                                            syncOnCommit, 
                                            noLatencyWrites,

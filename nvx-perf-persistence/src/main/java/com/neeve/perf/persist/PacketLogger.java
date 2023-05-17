@@ -363,6 +363,7 @@ final public class PacketLogger {
             }
         }
         finally {
+            System.out.println("Closing log...");
             _log.close();
         }
     }
