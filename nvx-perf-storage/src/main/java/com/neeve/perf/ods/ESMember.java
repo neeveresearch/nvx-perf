@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 import com.neeve.io.IOBuffer;
+import com.neeve.ods.IStoreCommitCompletionEvent;
 import com.neeve.ods.StoreBindingFactory;
 import com.neeve.ods.StoreObjectFactoryRegistry;
 import com.neeve.perf.common.LatencyWriter;
@@ -69,6 +70,9 @@ final public class ESMember extends Common {
         // create the commit batch
         final IRogMessage[] messages = createMessages(numPerCommit);
 
+        // create the completion event
+        final IStoreCommitCompletionEvent completionEvent = _store.createCommitCompletionEvent();
+        
         // create latency writer
         final LatencyWriter lw = new LatencyWriter("commit", noLatencyWrites ? null : "latencies.commit.bin", printIntervalStats);
 
@@ -87,7 +91,7 @@ final public class ESMember extends Common {
             if (current >= next) {
                 // commit
                 final long t0 = System.nanoTime();
-                _store.commit(i, i-1, messages, numPerCommit, null, 0);
+                _store.commit(i, i-1, messages, numPerCommit, completionEvent, 0).waitForCompletion();
                 final int commitTime = (int)(System.nanoTime() - t0 - nanoTimeOverhead);
 
                 // record times
@@ -281,7 +285,6 @@ final public class ESMember extends Common {
                 final boolean printIntervalStats = ((Boolean)parser.getOptionValue(printIntervalStatsOption, false));
                 System.out.println("***** ......printIntervalStats=" + printIntervalStats);
                 System.out.println("***** ......affinity=" + affinityStr);
-                System.out.println("*****");
                 System.out.println("***** ...}");
                 System.out.println("***** ...Store Persister {");
                 System.out.println("***** ......logMode=" + persisterProps.getProperty(RogLog.PROP_LOG_MODE));
