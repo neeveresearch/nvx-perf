@@ -51,7 +51,7 @@ final public class ESMember extends Common {
     }
 
     final private IRogMessage[] createMessages(final int count) {
-        final MessageFactory factory = new MessageFactory("rumi.xbuf2");
+        final MessageFactory messageFactory = new MessageFactory("rumi.xbuf2");
         final IRogMessage[] messages = new IRogMessage[count];
         for (int i = 0; i < count ; i++) {
             messages[i] = (IRogMessage)messageFactory.createCar(true);
