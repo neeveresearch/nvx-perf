@@ -21,6 +21,7 @@
  */
 package com.neeve.perf.ods;
 
+import java.text.DecimalFormat;
 import java.util.Properties;
 
 import com.eaio.uuid.UUID;
@@ -36,6 +37,7 @@ import com.neeve.ods.StoreReplicatorDescriptor;
 
 abstract class Common implements IStoreEventHandler {
     final protected IStoreBinding _store;
+    final protected DecimalFormat _dfmt;
 
     /**
      * Constructor
@@ -62,6 +64,7 @@ abstract class Common implements IStoreEventHandler {
             storeDescriptor.setPersister(storeName);
         }
         (_store = StoreBinding.create(memberName, storeDescriptor, this, flags)).open();
+        _dfmt = new DecimalFormat("#,###");
     }
 
     /**

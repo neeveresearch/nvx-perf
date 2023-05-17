@@ -33,6 +33,7 @@ import java.util.Properties;
 import com.neeve.io.IOBuffer;
 import com.neeve.ods.StoreBindingFactory;
 import com.neeve.ods.StoreObjectFactoryRegistry;
+import com.neeve.perf.common.LatencyWriter;
 import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.rog.IRogMessage;
 import com.neeve.rog.log.RogLog;
@@ -41,15 +42,12 @@ import com.neeve.util.UtlConstants;
 import com.neeve.util.UtlThread;
 
 final public class ESMember extends Common {
-    final private MessageFactory carFactory;
-
-    static {
-        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.MessageFactory());
-    }
-
     ESMember(final Properties persisterProps) throws Exception {
         super(true, persisterProps, false, null, StoreBindingFactory.FLG_EVENT_SOURCING);
-        carFactory = new MessageFactory("xbuf2");
+    }
+
+    final private void registerFactories() throws Exception {
+        StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.MessageFactory());
     }
 
     final private IRogMessage createMessage() {
@@ -65,78 +63,67 @@ final public class ESMember extends Common {
     }
 
     final private void run(final int count,
+                           final int warmupTime,
                            final int rate,
                            final int numPerCommit,
-                           final boolean recordTimes,
-                           final long nanoTimeOverhead) {
-        System.out.println("Sending...");
-        final int[] times = recordTimes ? new int[count] : null;
-        try {
-            int i = 1;
-            final long start = System.nanoTime();
-            long istart = start;
-            int di = 0;
-            final long nanosPerCommit = rate > 0 ? (1000000000l / rate) : 0;
-            long next = start + nanosPerCommit;
-            boolean warmUpCompleted = false;
-            int postWarmUpCount = 0;
-            long postWarmUpStart = 0;
-            int numFlushes = 0;
-            final IRogMessage[] messages = createMessages(numPerCommit);
-            while (i < count) {
-                final long current = System.nanoTime();
-                if (current >= next) {
-                    final long t0 = recordTimes ? current : 0l;
-                    _store.commit(i, i-1, messages, numPerCommit, null, 0);
-                    if (recordTimes) times[i] = (int)(System.nanoTime() - t0 - nanoTimeOverhead);
-                    next += nanosPerCommit;
-                    di++;
-                    i++;
-                    if (warmUpCompleted) {
-                        postWarmUpCount++;
-                    }
-                }
-                if (!warmUpCompleted && current - start > 5000000000L) { // 5 second warmup
-                    System.out.println("Warm up complete.");
-                    postWarmUpStart = current;
-                    warmUpCompleted = true;
-                }
-                if (current - istart > 1000000000L) { // every 1 second
-                    final int effectiveRate = (int)((di * 1000000000L) / (current - istart));
-                    System.out.println("Committed=" + i + " Rate=" + effectiveRate);
-                    istart = current;
-                    di = 0;
-                }
-            }
+                           final long nanoTimeOverhead,
+                           final boolean noLatencyWrites,
+                           final boolean printIntervalStats) throws Exception {
+        // create the commit batch
+        final IRogMessage[] messages = createMessages(numPerCommit);
+
+        // create latency writer
+        final LatencyWriter lw = new LatencyWriter("commit", noLatencyWrites ? null : "latencies.commit.bin", printIntervalStats);
+
+        // run
+        System.out.println("Running...");
+        int i = 1;
+        final long start = System.nanoTime();
+        final long nanosPerCommit = rate > 0 ? (1000000000l / rate) : 0;
+        long next = start + nanosPerCommit;
+        boolean warmupCompleted = false;
+        int postWarmupCount = 0;
+        long postWarmupStart = 0;
+        lw.start(rate, count);
+        while (i < count) {
             final long current = System.nanoTime();
-            final int overallRate = (int)((postWarmUpCount * 1000000000L) / (current - postWarmUpStart));
-            System.out.println("Done (Committed=" + i + " [Post Warmup=" + postWarmUpCount + "] Rate=" + overallRate + ")");
-            if (recordTimes) {
-                try {
-                    // times
-                    System.out.println("Writing times...");
-                    FileOutputStream fos = new FileOutputStream(new File("times.bin"));
-                    DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(fos, 8192));
-                    for (int k = 0; k < count; k++) {
-                        dos.writeInt(k);
-                        dos.writeInt(times[k]);
-                    }
-                    dos.flush();
-                    dos.close();
+            if (current >= next) {
+                // commit
+                final long t0 = System.nanoTime();
+                _store.commit(i, i-1, messages, numPerCommit, null, 0);
+                final int commitTime = (int)(System.nanoTime() - t0 - nanoTimeOverhead);
+
+                // record times
+                lw.write(commitTime);
+
+                // update counters
+                next += nanosPerCommit;
+                i++;
+                if (warmupCompleted) {
+                    postWarmupCount++;
                 }
-                catch (IOException e) {
-                    e.printStackTrace();
-                }
-                System.out.println("Done");
+            }
+            if (!warmupCompleted && current - start > (warmupTime * 1000000000L)) {
+                System.out.println("Warm up complete.");
+                postWarmupStart = current;
+                warmupCompleted = true;
             }
         }
-        catch (Exception e) {
-            System.out.println("Write failure [" + e.toString() + "]...");
-            e.printStackTrace();
-        }
+        final long stop = System.nanoTime();
+
+        // finish latency writing
+        lw.close();
+
+        final int overallRate = (int)((postWarmupCount * 1000000000L) / (stop - postWarmupStart));
+        System.out.println("Committed " + _dfmt.format(postWarmupCount) + " transactions (" + _dfmt.format(postWarmupCount * numPerCommit) + " messages) @ " + _dfmt.format(overallRate) + " commits/sec (" + _dfmt.format(overallRate * numPerCommit) + " msgs/sec) post warmup.");
     }
 
-    final private void run(final int count, final int rate, final int numPerCommit, final boolean recordTimes) throws Exception {
+    final private void run(final int count, 
+                           final int warmupTime,
+                           final int rate, 
+                           final int numPerCommit,
+                           final boolean noLatencyWrites,
+                           final boolean printIntervalStats) throws Exception {
         try {
             // calculate nanoTime overhead
             long nanoTimeOverhead = 0l;
@@ -147,11 +134,18 @@ final public class ESMember extends Common {
             }
             nanoTimeOverhead = (System.nanoTime() - start) / 100000000;
 
-            // send
-            run(count, rate, numPerCommit, recordTimes, nanoTimeOverhead);
+            // register factories
+            System.out.println("Registering factories...");
+            registerFactories();
 
-            // spacer
-            System.out.println("");
+            // run
+            run(count, 
+                warmupTime, 
+                rate, 
+                numPerCommit, 
+                nanoTimeOverhead, 
+                noLatencyWrites, 
+                printIntervalStats);
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -166,13 +160,17 @@ final public class ESMember extends Common {
         System.err.println("--------------------------------------------General Parameters------------------------------------------------------");
         System.err.println(" [{-c, --count} number of commits to perform]");
         System.err.println("   Number of commits to perform (default=10,000,000)");
+        System.err.println(" [{-t, --warmupTime} Warmup time]");
+        System.err.println("   Warmup time, in seconds, for calculation of throughput stats (default=2 (2 seconds))");
         System.err.println(" [{-r, --rate} commit rate]");
         System.err.println("   Rate at which to perform commits (default=-1 (unlimited))");
         System.err.println(" [{-n, --numPerCommit} number of messages per commit]");
         System.err.println("   Number of messages per commit (default=1)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
-        System.err.println(" [{-q, --time} record write times");
-        System.err.println("   Records how long it takes to write each message to the log (default=false)");
+        System.err.println(" [{-a, --noLatencyWrites} don't write latencies to a file");
+        System.err.println("   Indicates that latencies should not be written to a file (default=false)");
+        System.err.println(" [{-b, --printIntervalStats} print interval latency stats");
+        System.err.println("   Indicates that latencies stats should be printed on a periodic basis in addition to at the end (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-j, --affinity} CPU affinity of the write/read thread");
         System.err.println("   Sets the CPU affinity of the thread performing the store operations (default=false)");
@@ -216,6 +214,21 @@ final public class ESMember extends Common {
     // entry point
     final public static void main(final String[] args) throws Exception {
         final CmdLineParser parser = new CmdLineParser();
+
+        // test parameters
+        final CmdLineParser.Option countOption = parser.addIntegerOption('c', "count");
+        final CmdLineParser.Option warmupTimeOption = parser.addIntegerOption('t', "warmupTime");
+        final CmdLineParser.Option rateOption = parser.addIntegerOption('r', "rate");
+        final CmdLineParser.Option numPerCommitOption = parser.addIntegerOption('n', "numPerCommit");
+
+        // latency writer related options
+        final CmdLineParser.Option noLatencyWritesOption = parser.addBooleanOption('a', "noLatencyWrites");
+        final CmdLineParser.Option printIntervalStatsOption = parser.addBooleanOption('b', "printIntervalStats");
+
+        // affinity related options
+        final CmdLineParser.Option affinityOption = parser.addStringOption('j', "affinity");
+
+        // store persister related options
         final CmdLineParser.Option logModeOption = parser.addStringOption('m', "logMode");
         final CmdLineParser.Option initialLogLengthOption = parser.addIntegerOption('i', "initialLogLength");
         final CmdLineParser.Option zeroOutInitialOption = parser.addBooleanOption('z', "zeroOutInitial");
@@ -227,21 +240,21 @@ final public class ESMember extends Common {
         final CmdLineParser.Option writerWaitStrategyOption = parser.addStringOption('w', "writerWaitStrategy");
         final CmdLineParser.Option writerAffinityOption = parser.addStringOption('x', "writerAffinity");
         final CmdLineParser.Option pageSizeOption = parser.addIntegerOption('p', "pageSize");
-        final CmdLineParser.Option countOption = parser.addIntegerOption('c', "count");
-        final CmdLineParser.Option rateOption = parser.addIntegerOption('r', "rate");
-        final CmdLineParser.Option numPerCommitOption = parser.addIntegerOption('n', "numPerCommit");
-        final CmdLineParser.Option recordTimesOption = parser.addBooleanOption('q', "time");
-        final CmdLineParser.Option affinityOption = parser.addStringOption('j', "affinity");
+
+        // help 
         final CmdLineParser.Option helpOption = parser.addBooleanOption('h', "help");
+
         try {
             parser.parse(args);
             if (!((Boolean)parser.getOptionValue(helpOption, false))) {
+                // affinitize committer thread
                 final String affinityStr = (String)parser.getOptionValue(affinityOption , null);
                 if (affinityStr != null) {
                     System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
                     UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(affinityStr));
                 }
 
+                // store persister props
                 final Properties persisterProps = new Properties();
                 persisterProps.setProperty(RogLog.PROP_LOG_MODE, (String)parser.getOptionValue(logModeOption, "rw"));
                 persisterProps.setProperty(RogLog.PROP_INITIAL_LOG_LENGTH, String.valueOf(parser.getOptionValue(initialLogLengthOption, 1)));
@@ -257,17 +270,23 @@ final public class ESMember extends Common {
 
                 System.out.println("");
                 System.out.println("***** Parameters");
-                System.out.println("***** ...Runner {");
+                System.out.println("***** ...Runner ");
                 final int count = (Integer)parser.getOptionValue(countOption, 10000000);
                 System.out.println("***** ......count=" + count);
+                final int warmupTime = (Integer)parser.getOptionValue(warmupTimeOption, 2);
+                System.out.println("***** ......warmupTime=" + warmupTime);
                 final int rate = (Integer)parser.getOptionValue(rateOption, -1);
                 System.out.println("***** ......rate=" + rate);
                 final int numPerCommit = (Integer)parser.getOptionValue(numPerCommitOption, 1);
                 System.out.println("***** ......numPerCommit=" + numPerCommit);
-                final boolean recordTimes = ((Boolean)parser.getOptionValue(recordTimesOption, false));
-                System.out.println("***** ......recordTimes=" + recordTimes);
+                final boolean noLatencyWrites = ((Boolean)parser.getOptionValue(noLatencyWritesOption, false));
+                System.out.println("***** ......noLatencyWrites=" + noLatencyWrites);
+                final boolean printIntervalStats = ((Boolean)parser.getOptionValue(printIntervalStatsOption, false));
+                System.out.println("***** ......printIntervalStats=" + printIntervalStats);
+                System.out.println("***** ......affinity=" + affinityStr);
+                System.out.println("*****");
                 System.out.println("***** ...}");
-                System.out.println("***** ...Persister {");
+                System.out.println("***** ...Store Persister {");
                 System.out.println("***** ......logMode=" + persisterProps.getProperty(RogLog.PROP_LOG_MODE));
                 System.out.println("***** ......initialLogLength=" + persisterProps.getProperty(RogLog.PROP_INITIAL_LOG_LENGTH));
                 System.out.println("***** ......zeroOutInitial=" + persisterProps.getProperty(RogLog.PROP_ZERO_OUT_INITIAL));
@@ -281,7 +300,12 @@ final public class ESMember extends Common {
                 System.out.println("***** ......pageSize=" + persisterProps.getProperty(RogLog.PROP_PAGE_SIZE));
                 System.out.println("***** ...}");
                 System.out.println("");
-                new ESMember(persisterProps).run(count, rate, numPerCommit, recordTimes);
+                new ESMember(persisterProps).run(count, 
+                                                 warmupTime, 
+                                                 rate, 
+                                                 numPerCommit, 
+                                                 noLatencyWrites,
+                                                 printIntervalStats);
             }
             else {
                 printUsage();

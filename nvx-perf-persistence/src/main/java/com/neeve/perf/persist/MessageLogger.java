@@ -326,12 +326,12 @@ final public class MessageLogger {
                 System.out.println("***** ...affinity=" + affinityStr);
                 System.out.println("");
                 new MessageLogger(props).run(count,
-                                           warmupTime, 
-                                           rate, 
-                                           numPerCommit, 
-                                           syncOnCommit, 
-                                           noLatencyWrites,
-                                           printIntervalStats);
+                                             warmupTime, 
+                                             rate, 
+                                             numPerCommit, 
+                                             syncOnCommit, 
+                                             noLatencyWrites,
+                                             printIntervalStats);
             }
             else {
                 printUsage();
