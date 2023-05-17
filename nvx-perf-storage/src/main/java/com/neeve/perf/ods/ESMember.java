@@ -50,14 +50,11 @@ final public class ESMember extends Common {
         StoreObjectFactoryRegistry.getInstance().registerObjectFactory(new com.neeve.perf.serialization.rumi.xbuf2.MessageFactory());
     }
 
-    final private IRogMessage createMessage() {
-        return (IRogMessage)carFactory.createCar(true);
-    }
-
     final private IRogMessage[] createMessages(final int count) {
-        IRogMessage[] messages = new IRogMessage[count];
+        final MessageFactory factory = new MessageFactory("rumi.xbuf2");
+        final IRogMessage[] messages = new IRogMessage[count];
         for (int i = 0; i < count ; i++) {
-            messages[i] = createMessage();
+            messages[i] = (IRogMessage)messageFactory.createCar(true);
         }
         return messages;
     }
