@@ -35,7 +35,8 @@ import com.neeve.aep.AepMessageSender;
 import com.neeve.aep.annotations.EventHandler;
 import com.neeve.config.Config;
 import com.neeve.config.VMConfigurer;
-import com.neeve.perf.serialization.MessageFactory;
+import com.neeve.perf.serialization.Driver;
+import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.Car;
 import com.neeve.rog.IRogMessage;
 import com.neeve.server.embedded.EmbeddedXVM;
@@ -48,12 +49,12 @@ import com.neeve.util.UtlTime;
 
 @AppHAPolicy(value = AepEngine.HAPolicy.EventSourcing)
 final public class ESProcessor {
-    final private MessageFactory _messageFactory;
+    final private Provider<Car> _provider;
     private AepEngine _engine;
     private AepMessageSender _messageSender;
 
     private ESProcessor() {
-        _messageFactory = new MessageFactory(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
+        _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
     }
 
 	@AppInjectionPoint
@@ -68,8 +69,11 @@ final public class ESProcessor {
 
     @EventHandler
     final public void onMessage(final Car inMessage) throws Exception {
+        // read inbound message
+        _provider.decode(inMessage);
+
         // prepare outbound message
-        final IRogMessage outMessage = (IRogMessage)_messageFactory.createCar(true);
+        final IRogMessage outMessage = _provider.create(true);
 
         // send outbound
         outMessage.setPostWireTs(inMessage.getPostWireTs());

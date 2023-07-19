@@ -170,6 +170,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
         try {
             // dump params
             System.out.println("Driver Parameters {");
+            System.out.println("...Encoding=" + _provider.name());
             System.out.println("...Count=" + _count);
             System.out.println("...Warmup Time=" + _warmupTime);
             System.out.println("...Rate=" + _rate);
