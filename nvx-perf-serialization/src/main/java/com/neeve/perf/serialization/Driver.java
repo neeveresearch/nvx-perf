@@ -70,11 +70,11 @@ public class Driver extends AnnotatedCommand {
                           latencyManager.mean());
     }
 
-    final static Provider<?> getProvider(final String providerStr) {
-        if (providerStr.equalsIgnoreCase("rumi.xbuf2") || providerStr.equalsIgnoreCase("rumi.xbuf2.serial")) {
+    final public static Provider<?> getProvider(final String providerStr) {
+        if (providerStr.equalsIgnoreCase("xbuf2") || providerStr.equalsIgnoreCase("xbuf2.serial") || providerStr.equalsIgnoreCase("rumi.xbuf2") || providerStr.equalsIgnoreCase("rumi.xbuf2.serial")) {
             return new com.neeve.perf.serialization.rumi.xbuf2.serial.CarBenchmark();
         }
-        else if (providerStr.equalsIgnoreCase("rumi.xbuf2.random")) {
+        else if (providerStr.equalsIgnoreCase("xbuf2.random") || providerStr.equalsIgnoreCase("rumi.xbuf2.random")) {
             return new com.neeve.perf.serialization.rumi.xbuf2.random.CarBenchmark();
         }
         else {

@@ -25,6 +25,9 @@ import com.neeve.sma.MessageView;
 
 public interface Provider<T extends MessageView> {
     public String name();
+    public short vfid();
+    public short otype();
+    public int encoding();
     public T create(boolean encode);
     public void prepareToEncode();
     public void encode(T message);

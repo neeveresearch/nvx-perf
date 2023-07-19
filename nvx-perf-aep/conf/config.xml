@@ -1,19 +1,11 @@
 <?xml version="1.0"?>
 <model xmlns="http://www.neeveresearch.com/schema/x-ddl" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-    <env>
-        <!-- App configuration -->
-        <driver>
-            <sendRate>100000</sendRate>
-            <sendCount>10000000</sendCount>
-        </driver>
-    </env>
-
     <busProviders>
         <provider name="local" providerClass="com.neeve.perf.aep.engine.driver.local.LocalProvider" />
     </busProviders>
 
     <buses>
-        <bus name="processor" descriptor="local://.">
+        <bus name="processor" descriptor="local://.&amp;encoding=${DRIVER_TEST_ENCODING::xbuf2.serial}&amp;count=${DRIVER_TEST_COUNT::10000000}&amp;warmup_time=${DRIVER_TEST_WARMUP_TIME::2}&amp;rate=${DRIVER_TEST_RATE::100000}&amp;lw_nowrite=${DRIVER_LW_NOWRITE::false}&amp;lw_print_interval_stats=${DRIVER_LW_PRINT_INTERVAL_STATS::false}&amp;injector_cpu_affinity_mask=${DRIVER_INJECTOR_CPU_AFFINITY_MASK::null}">
             <channels>
                 <channel name="client" id="1"/>
             </channels>
@@ -24,7 +16,7 @@
         <app name="processor" mainClass="com.neeve.perf.aep.engine.es.Processor">
             <messaging>
                 <factories>
-                    <factory name="com.neeve.perf.aep.messages.MessageFactory"/>
+                    <factory name="com.neeve.perf.serialization.rumi.xbuf2.MessageFactory"/>
                 </factories>
                 <bus name="processor">
                     <channels>
@@ -34,33 +26,35 @@
                 </bus>
             </messaging>
 
-            <inboundEventMultiplexing type="FreeThreadedSerialized">
-                <queueDepth>32</queueDepth>
-                <queueDrainerCpuAffinityMask>${processor.muxaffinity::[2]}</queueDrainerCpuAffinityMask>
+            <inboundEventMultiplexing>
+                <queueDepth>${MUX_QUEUE_DEPTH::1024}</queueDepth>
+                <queueDrainerCpuAffinityMask>${MUX_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
             </inboundEventMultiplexing>
 
             <storage enabled="false">
-                <discoveryDescriptor>mcast://224.0.1.200:4091&amp;localIfAddr=${CLUSTER_DISCOVERY_LOCALIFADDR::0.0.0.0}</discoveryDescriptor>
-
                 <factories>
-                    <factory name="com.neeve.perf.aep.messages.MessageFactory"/>
+                    <factory name="com.neeve.perf.serialization.rumi.xbuf2.MessageFactory"/>
                 </factories>
 
-                <clustering enabled="true">
+                <clustering enabled="${CLUSTERING_ENABLED::false}">
+                    <discoveryDescriptor>mcast://224.0.1.200:4091&amp;localIfAddr=${CLUSTER_DISCOVERY_LOCALIFADDR::0.0.0.0}</discoveryDescriptor>
                     <localIfAddr>${CLUSTER_REPLICATOR_LOCALIFADDR::0.0.0.0}</localIfAddr>
                     <localPort>${CLUSTER_REPLICATOR_LOCALIFPORT::0}</localPort>
                 </clustering>
 
-                <persistenceQuorum>1</persistenceQuorum>
-                <persistence enabled="true">
-                    <storeRoot>${TLOG_LOCATION::rdat}</storeRoot>
-                    <detachedPersist enabled="false"/>
-                    <flushOnCommit>true</flushOnCommit>
-                    <autoFlushSize>0</autoFlushSize>
-                    <initialLogLength>20</initialLogLength>
-                    <pageSize>4096</pageSize>
-                    <zeroOutInitial>true</zeroOutInitial>
-                    <flushUsingMappedMemory>true</flushUsingMappedMemory>
+                <persistenceQuorum>${PERSISTENCE_QUORUM::1}</persistenceQuorum>
+                <persistence enabled="${PERSISTENCE_ENABLED::false}">
+                    <storeRoot>${PERSISTENCE_LOG_LOCATION::.}</storeRoot>
+                    <initialLogLength>${PERSISTENCE_INITIAL_LOG_LENGTH::1}</initialLogLength>
+                    <zeroOutInitial>${PERSISTENCE_ZERO_OUT_INITIAL::false}</zeroOutInitial>
+                    <autoFlushSize>${PERSISTENCE_WRITE_BUFFER_SIZE::8192}</autoFlushSize>
+                    <flushUsingMappedMemory>${PERSISTENCE_FLUSH_USING_MAPPED_MEMORY::false}</flushUsingMappedMemory>
+                    <flushOnCommit>${PERSISTENCE_FLUSH_ON_COMMIT::false}</flushOnCommit>
+                    <detachedPersist enabled="${PERSISTENCE_DETACHED::false}">
+                        <queueDepth>${PERSISTENCE_DETACHED_QUEUE_DEPTH::1024}</queueDepth>
+                        <queueDrainerCpuAffinityMask>${PERSISTENCE_DETACHED_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
+                    </detachedPersist>
+                    <pageSize>${PERSISTENCE_PAGE_SIZE::4096}</pageSize>
                 </persistence>
             </storage>
 
@@ -99,66 +93,4 @@
             </apps>
         </server>
     </servers>
-
-    <profiles>
-        <profile name="n5">
-            <activation>
-                <properties>
-                    <lumino.agent.env>neeve-lab</lumino.agent.env>
-                </properties>
-            </activation>
-            <env>
-                <TLOG_LOCATION>/root/work/perf/tlog</TLOG_LOCATION>
-                <nv>
-                    <optimizefor>latency</optimizefor>
-                    <conservecpu>false</conservecpu>
-                    <optimizeMemoryUsage>false</optimizeMemoryUsage>
-                    <msg.latency.stats>false</msg.latency.stats>
-                    <discovery.descriptor>mcast://224.0.1.200:4090&amp;localIfAddr=${DISCOVERY_LOCALIFADDR::64.71.157.12}</discovery.descriptor>
-                    <log.directory>/root/work/perf/log/${nv.ddl.targetxvm}</log.directory>
-                </nv>
-            </env>
-
-            <servers>
-                <templates>
-                    <server name="server-template">
-                        <heartbeats enabled="true" interval="5">
-                            <includeMessageTypeStats>false</includeMessageTypeStats>
-                        </heartbeats>
-                        <provisioning>
-                            <host>${HOST::.}</host>
-                            <rootDirectory>/root/work/perf</rootDirectory>
-                            <jvm>
-                                <javaHome>%JAVA_HOME_ZULU_8%</javaHome>
-                            </jvm>
-                        </provisioning>
-                    </server>
-                </templates>
-
-                <server name="processor-1a">
-                    <env>
-                        <HOST>192.168.1.12</HOST>
-                        <HEAP_SIZE_PARAMS>-Xms8g -Xmx8g</HEAP_SIZE_PARAMS>
-                        <DISCOVERY_LOCALIFADDR>64.71.157.12</DISCOVERY_LOCALIFADDR>
-                        <CLUSTER_DISCOVERY_LOCALIFADDR>192.168.2.12</CLUSTER_DISCOVERY_LOCALIFADDR>
-                        <CLUSTER_REPLICATOR_LOCALIFADDR>192.168.2.12</CLUSTER_REPLICATOR_LOCALIFADDR>
-                        <CLUSTER_REPLICATOR_LOCALIFPORT>12000</CLUSTER_REPLICATOR_LOCALIFPORT>
-                    </env>
-                </server>
-            </servers>
-        </profile>
-        <profile name="primary">
-            <env>
-                <processor.mainaffinity>[1]</processor.mainaffinity>
-                <processor.muxaffinity>[3]</processor.muxaffinity>
-                <driver.sendAffinity>[2]</driver.sendAffinity>
-            </env>
-        </profile>
-        <profile name="backup">
-            <env>
-                <processor.mainaffinity>[1]</processor.mainaffinity>
-                <processor.muxaffinity>[3]</processor.muxaffinity>
-            </env>
-        </profile>
-    </profiles>
 </model>

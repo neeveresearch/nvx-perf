@@ -21,74 +21,48 @@
  */
 package com.neeve.perf.aep.engine;
 
-import com.neeve.config.Config;
-import com.neeve.stats.StatsLatencyWriter;
+import com.neeve.perf.common.LatencyWriter;
 import com.neeve.util.UtlTime;
 
 final public class LatencyRecorder {
-    public enum LegToRecord {
-        w2w,
-        w2b,
-        b,
-        s;
-    }
-    final private static LegToRecord _leg;
-    final private static StatsLatencyWriter _lw;
     final private static long _utlTimeOverhead;
+    private static boolean _noWrite;
+    private static boolean _printIntervalStats;
+    private static LatencyWriter _lw_w2w;
 
     static {
         try {
-            _leg = LegToRecord.valueOf(Config.getValue("processor.latencyLegToRecord", "w2w"));
-            _lw = new StatsLatencyWriter("latencies.bin");
-            long nanoTimeOverhead = 0l;
+            // calc UtlTime.now() overhead
             long start = UtlTime.now();
             for (int i = 0; i < 100000000l; i++) {
                 UtlTime.now();
             }
             _utlTimeOverhead = (UtlTime.now() - start) / 100000000l;
-            System.out.println("*** Latency Leg To Record=" + _leg);
-            System.out.println("*** UtlTime overhead=" + _utlTimeOverhead + "ns");
-            System.out.println("*** LatencyWriter useNative=" + StatsLatencyWriter.isNativeEnabled());
+            System.out.println("UtlTime overhead=" + _utlTimeOverhead + "ns");
         }
         catch (Throwable e) {
             throw new RuntimeException(e);
         }
     }
 
-    final public static LegToRecord legToRecord() {
-        return _leg;
+    final public static void noWrite(final boolean val) {
+        _noWrite = val;
+    }
+
+    final public static void printIntervalStats(final boolean val) {
+        _printIntervalStats = val;
     }
 
     final public static void start(final int rate, final int count) throws Exception {
-        _lw.start(rate, count, true, true);
+        (_lw_w2w = new LatencyWriter("w2w", _noWrite ? null : "latencies.w2w.bin", _printIntervalStats)).start(rate, count);
     }
 
     final public static void recordW2w(final long val) throws Exception {
-        if (_leg == LegToRecord.w2w) {
-            _lw.write((int)(val - 5 * _utlTimeOverhead));
-        }
-    }
-
-    final public static void recordW2b(final long val) throws Exception {
-        if (_leg == LegToRecord.w2b) {
-            _lw.write((int)(val - 1 * _utlTimeOverhead));
-        }
-    }
-
-    final public static void recordB(final long val) throws Exception {
-        if (_leg == LegToRecord.b) {
-            _lw.write((int)(val - 2 * _utlTimeOverhead));
-        }
-    }
-
-    final public static void recordS(final long val) throws Exception {
-        if (_leg == LegToRecord.s) {
-            _lw.write((int)(val - 1 * _utlTimeOverhead));
-        }
+        _lw_w2w.write((int)(val - _utlTimeOverhead));
     }
 
     final public static void stop() throws Exception {
-        _lw.close();
+        _lw_w2w.close();
     }
 }
 

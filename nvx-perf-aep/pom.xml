@@ -16,9 +16,21 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <version>3.9</version>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-perf-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-perf-models</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.neeve</groupId>
+            <artifactId>nvx-perf-serialization</artifactId>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 
@@ -27,7 +39,7 @@
             <plugin>
                 <groupId>com.neeve</groupId>
                 <artifactId>nvx-adm-maven-plugin</artifactId>
-                <version>${nvx.rumi.version}</version>
+                <version>${nvx.talon.version}</version>
                 <executions>
                     <execution>
                         <id>State</id>
@@ -37,18 +49,6 @@
                         </goals>
                         <configuration>
                             <modelFile>${project.basedir}/src/main/models/com/neeve/perf/aep/engine/state/model.xml</modelFile>
-                            <encodingType>Xbuf2</encodingType>
-                        </configuration>
-                    </execution>
-
-                    <execution>
-                        <id>Messages</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>adm-generate</goal>
-                        </goals>
-                        <configuration>
-                            <modelFile>${project.basedir}/src/main/models/com/neeve/perf/aep/messages/model.xml</modelFile>
                             <encodingType>Xbuf2</encodingType>
                         </configuration>
                     </execution>

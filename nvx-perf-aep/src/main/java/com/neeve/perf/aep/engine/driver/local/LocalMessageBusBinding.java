@@ -21,18 +21,17 @@
  */
 package com.neeve.perf.aep.engine.driver.local;
 
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.text.DecimalFormat;
 
-import com.neeve.config.Config;
 import com.neeve.event.IEventHandler;
-import com.neeve.io.IONativePacket;
-import com.neeve.io.IOBuffer;
 import com.neeve.perf.aep.engine.LatencyRecorder;
-import com.neeve.perf.aep.messages.Message;
-import com.neeve.perf.aep.messages.MessageFactory;
+import com.neeve.perf.serialization.Driver;
+import com.neeve.perf.serialization.MessageFactory;
+import com.neeve.perf.serialization.Provider;
+import com.neeve.perf.serialization.rumi.xbuf2.Car;
+import com.neeve.quark.QuarkBuffer;
+import com.neeve.quark.QuarkPacket;
+import com.neeve.rog.IRogMessage;
 import com.neeve.sma.MessageBusDescriptor;
 import com.neeve.sma.MessageChannel;
 import com.neeve.sma.MessageChannelDescriptor;
@@ -42,54 +41,61 @@ import com.neeve.sma.SmaException;
 import com.neeve.sma.impl.MessageBusBindingBase;
 import com.neeve.util.UtlGovernor;
 import com.neeve.util.UtlThread;
-import com.neeve.util.UtlTime;
 
 final public class LocalMessageBusBinding extends MessageBusBindingBase implements Runnable {
-    final private int sendCount = (int)Config.getValue("driver.sendCount", 10000);
-    final private int sendRate = (int)Config.getValue("driver.sendRate", 1000);
-    final private long sendAffinity = UtlThread.parseAffinityMask(Config.getValue("driver.sendAffinity", "0"));
-    final private int sender = hashCode();
-    final private long inBufferAddress;
-    final private Message.Serializer messageSerializer;
-    private int totalReceived;
+    final private int _sender = hashCode();
+    final private DecimalFormat _dfmt;
+    private Provider<?> _provider;
+    private QuarkBuffer _serializedMessage;
+    private int _serializedMessageLength;
+    private String _encoding;
+    private int _count;
+    private int _warmupTime;
+    private int _rate;
+    private String _injectorCPUAffinityMask;
+    private long _start;
+    private boolean _warmupCompleted;
+    private int _postWarmupCount;
+    private long _postWarmupStart;
+    private int _numReceived;
 
     LocalMessageBusBinding(final String userName,
                            final MessageBusDescriptor descriptor,
                            final IEventHandler eventHandler) throws Exception {
         super(null, userName, descriptor, eventHandler);
-        inBufferAddress = IOBuffer.allocateMemoryBlock(1024, false);
-        messageSerializer = Message.Serializer.create();
+        _dfmt = new DecimalFormat("#,###");
     }
 
-    final private void prepareSerializedMessage(final IONativePacket packet) {
-        messageSerializer.init(inBufferAddress, 0).key("test");
-        packet.init(inBufferAddress, 0, messageSerializer.done());
+    final private void prepareSerializedMessage(final QuarkPacket packet) {
+        packet.init(_serializedMessage, 0, _serializedMessageLength);
     }
 
     final void send(final MessageView view) throws SmaException {
-        final long preWireTs = UtlTime.now();
+        final long preWireTs = System.nanoTime();
 
         // this is where the message would be sent out on the outbound transport
 
         // update stats
         view.setPostWireSendTs(preWireTs);
         view.setPreWireTs(preWireTs);
-        if (MessageLatencyManager.captureMsgLatencyStats && latencyManager != null) latencyManager.update(view, MessageLatencyManager.MessagingDirection.Outbound);
 
         // update w2w latency
         try {
             LatencyRecorder.recordW2w(view.getPreWireTs() - view.getPostWireTs());
-            if (++totalReceived == sendCount) {
-                try {
-                    LatencyRecorder.stop();
-                    System.out.println("Done");
-                }
-                catch (Exception ex_) {
-                    ex_.printStackTrace();
-                }
-                finally {
-                    System.exit(0);
-                }
+            if (_warmupCompleted) {
+                _postWarmupCount++;
+            }
+            if (!_warmupCompleted && preWireTs - _start > (_warmupTime * 1000000000L)) {
+                System.out.println("Warm up complete.");
+                _postWarmupStart = preWireTs;
+                _warmupCompleted = true;
+            }
+            if (++_numReceived == _count) {
+                final long stop = System.nanoTime();
+                LatencyRecorder.stop();
+                final int overallRate = (int)((_postWarmupCount * 1000000000L) / (stop - _postWarmupStart));
+                System.out.println("Processed " + _dfmt.format(_postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
+                System.out.println("Run complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
             }
         }
         catch (Throwable e) {
@@ -99,6 +105,18 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
 
     @Override
     final protected void doOpen() throws SmaException {
+        _provider = Driver.getProvider(descriptor.getProviderConfig().getProperty("encoding", "xbuf2.serial"));
+        _serializedMessage = QuarkBuffer.create(1024, true);
+        _serializedMessageLength = (((Car)_provider.create(true)).serializeTo(_serializedMessage, 0));
+        _count = Integer.parseInt(descriptor.getProviderConfig().getProperty("count", "10000000"));
+        _warmupTime = Integer.parseInt(descriptor.getProviderConfig().getProperty("warmup_time", "2"));
+        _rate = Integer.parseInt(descriptor.getProviderConfig().getProperty("rate", "100000"));
+        _injectorCPUAffinityMask = descriptor.getProviderConfig().getProperty("injector_cpu_affinity_mask", null);
+        if (_injectorCPUAffinityMask != null && _injectorCPUAffinityMask.equalsIgnoreCase("null")) {
+            _injectorCPUAffinityMask = null;
+        }
+        LatencyRecorder.noWrite(Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("lw_nowrite", "false")));
+        LatencyRecorder.printIntervalStats(Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("lw_print_interval_stats", "false")));
     }
 
     @Override
@@ -112,7 +130,25 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     }
 
     @Override
-    final protected void doFlush() throws SmaException {
+    final protected void doFlush(final FlushContext flushContext) throws SmaException {
+        if (flushContext != null) {
+            switch (flushContext.flushMode) {
+                case SYNC_BLOCKING:
+                    ((SynchronousBlockingFlushContext)flushContext).complete = true;
+                    break;
+
+                case SYNC_NON_BLOCKING:
+                    ((SynchronousNonBlockingFlushContext)flushContext).complete = true;
+                    break;
+
+                case ASYNC:
+                    ((AsynchronousFlushContext)flushContext).syncComplete = true;
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 
     @Override
@@ -132,32 +168,42 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     @Override
     final public void run() {
         try {
-            System.out.println("*** Send Rate=" + sendRate);
-            System.out.println("*** Send Count=" + sendCount);
-            System.out.println("*** Send Affinity=" + sendAffinity);
-            UtlThread.setCPUAffinityMask(sendAffinity);
+            // dump params
+            System.out.println("Driver Parameters {");
+            System.out.println("...Count=" + _count);
+            System.out.println("...Warmup Time=" + _warmupTime);
+            System.out.println("...Rate=" + _rate);
+            System.out.println("...Affinity=" + _injectorCPUAffinityMask);
 
+            // affinitize
+            if (_injectorCPUAffinityMask != null) {
+                UtlThread.setCPUAffinityMask(_injectorCPUAffinityMask);
+            }
+
+            // get the channel to dispatch inbound messages on
             final LocalMessageChannel channel = (LocalMessageChannel)getMessageChannel("client");
-            LatencyRecorder.start(sendRate, sendCount);
-            UtlGovernor.run(sendCount, sendRate, new Runnable() {
-                final private IONativePacket packet = new IONativePacket();
+
+            // start the latency recorder
+            LatencyRecorder.start(_rate, _count);
+
+            // run
+            _start = System.nanoTime();
+            UtlGovernor.run(_count, _rate, new Runnable() {
+                final private QuarkPacket packet = new QuarkPacket();
 
                 @Override
                 final public void run() {
                     try {
                         prepareSerializedMessage(packet);
-                        final long now = UtlTime.now();
+                        final long now = System.nanoTime();
                         LocalMessageBusBinding.this.onMessage(channel,
                                                               LocalMessageBusBinding.this.wrap(packet,
-                                                                                               MessageFactory.VFID,
-                                                                                               MessageFactory.ID_Message,
-                                                                                               MessageView.ENCODING_TYPE_QUARK,
-                                                                                               sender,
+                                                                                               _provider.vfid(),
+                                                                                               _provider.otype(),
+                                                                                               _provider.encoding(),
+                                                                                               _sender,
                                                                                                0,
                                                                                                0l,
-                                                                                               0l,
-                                                                                               null,
-                                                                                               null,
                                                                                                null,
                                                                                                0l,
                                                                                                0l,

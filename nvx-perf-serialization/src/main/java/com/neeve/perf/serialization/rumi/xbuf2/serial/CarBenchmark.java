@@ -293,6 +293,21 @@ public class CarBenchmark implements Provider<Car> {
     }
 
     @Override
+    public short vfid() {
+        return com.neeve.perf.serialization.rumi.xbuf2.MessageFactory.VFID;
+    }
+
+    @Override
+    public short otype() {
+        return com.neeve.perf.serialization.rumi.xbuf2.MessageFactory.ID_Car;
+    }
+
+    @Override
+    public int encoding() {
+        return MessageView.ENCODING_TYPE_PROTOBUF;
+    }
+
+    @Override
     public Car create(final boolean encode) {
         final Car car = Car.create();
         final Car.Serializer serializer = car.serializer(1024);

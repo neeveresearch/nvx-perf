@@ -101,10 +101,10 @@ final public class Driver extends AnnotatedCommand {
     private String waitStrategy;
     @Option(shortForm = 'q', longForm = "queueSize", required = false, description = "Sets the queue size to be configured in the multiplexer")
     private String queueSize;
-    @Option(shortForm = 'p', longForm = "producerAffinity", required = false, description = "Sets the producer thread affinity")
-    private String producerAffinity;
-    @Option(shortForm = 'c', longForm = "consumerAffinity", required = false, description = "Sets the consumer thread affinity")
-    private String consumerAffinity;
+    @Option(shortForm = 'p', longForm = "producerCPUAffinityMask", required = false, description = "Sets the producer thread CPU affinity mask")
+    private String producerCPUAffinityMask;
+    @Option(shortForm = 'c', longForm = "consumerCPUAffinityMask", required = false, description = "Sets the consumer thread CPU affinity mask")
+    private String consumerCPUAffinityMask;
     private int[] latencies;
 
     public Driver() {}
@@ -141,8 +141,8 @@ final public class Driver extends AnnotatedCommand {
         if (waitStrategy != null) {
             props.setProperty("queueWaitStrategy", waitStrategy);
         }
-        if (consumerAffinity != null) {
-            props.setProperty("queueDrainerCpuAffinityMask", consumerAffinity);
+        if (consumerCPUAffinityMask != null) {
+            props.setProperty("queueDrainerCpuAffinityMask", consumerCPUAffinityMask);
         }
         final IEventMultiplexer mux = EventMultiplexerSingleThreaded.create("test", false, new EventHandler(), props);
 
@@ -154,8 +154,8 @@ final public class Driver extends AnnotatedCommand {
         System.out.println("  OfferStrategy..............." + offerStrategy + " (actual=" + mux.getStats().getClaimStrategy() + ")");
         System.out.println("  Wait Strategy..............." + waitStrategy + " (actual=" + mux.getStats().getWaitStrategy() + ")");
         System.out.println("  Queue Size.................." + queueSize + " (actual=" + mux.getStats().getCapacity() + ")");
-        System.out.println("  Producer Affinity..........." + producerAffinity);
-        System.out.println("  Consumer Affinity..........." + consumerAffinity);
+        System.out.println("  Producer CPU Affinity Mask.." + producerCPUAffinityMask);
+        System.out.println("  Consumer CPU Affinity Mask.." + consumerCPUAffinityMask);
         System.out.println("  nv.optimizefor.............." + (XRuntime.optimizeForThroughput() ? "Throughput" : (XRuntime.optimizeForLatency() ? "Latency" : "None")));
         System.out.println("  nv.optimizeMemoryUsage......" + XRuntime.optimizeMemoryUsage());
         System.out.println("  nv.conservecpu.............." + XRuntime.conserveCPU());
@@ -165,8 +165,8 @@ final public class Driver extends AnnotatedCommand {
         mux.open();
 
         // set producer affinity
-        if (producerAffinity != null) {
-            UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(producerAffinity));
+        if (producerCPUAffinityMask != null) {
+            UtlThread.setCPUAffinityMask(UtlThread.parseAffinityMask(producerCPUAffinityMask));
         }
 
         // create latency array
