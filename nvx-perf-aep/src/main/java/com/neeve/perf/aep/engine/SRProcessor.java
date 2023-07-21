@@ -37,7 +37,8 @@ import com.neeve.aep.annotations.EventHandler;
 import com.neeve.config.Config;
 import com.neeve.config.VMConfigurer;
 import com.neeve.perf.aep.engine.state.Repository;
-import com.neeve.perf.serialization.MessageFactory;
+import com.neeve.perf.serialization.Driver;
+import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.Car;
 import com.neeve.rog.IRogMessage;
 import com.neeve.server.embedded.EmbeddedXVM;
@@ -52,12 +53,12 @@ import com.neeve.util.UtlTime;
 
 @AppHAPolicy(value = AepEngine.HAPolicy.StateReplication)
 final public class SRProcessor {
-    final private MessageFactory _messageFactory;
+    final private Provider<Car> _provider;
     private AepEngine _engine;
     private AepMessageSender _messageSender;
 
     private SRProcessor() {
-        _messageFactory = new MessageFactory(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
+        _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
     }
 
 	@AppInjectionPoint
@@ -82,8 +83,11 @@ final public class SRProcessor {
 
     @EventHandler
     final public void onMessage(final Car inMessage, final Repository repository) throws Exception {
+        // read inbound message
+        _provider.decode(inMessage);
+
         // prepare outbound message
-        final IRogMessage outMessage = (IRogMessage)_messageFactory.createCar(true);
+        final IRogMessage outMessage = _provider.create(true);
 
         // send outbound
         outMessage.setPostWireTs(inMessage.getPostWireTs());
@@ -116,8 +120,16 @@ final public class SRProcessor {
         System.err.println("---------------------------------------Engine Multiplexer Parameters------------------------------------------------");
         System.err.println(" [{-g, --muxQueueDepth} Depth of the engine event multiplexer queue");
         System.err.println("   Sets the depth of the engine event multiplexer queue (default=1024)");
-        System.err.println(" [{-y, --muxCPUAffinityMask} CPU affinity mask of the engine event multiiplexer thread");
+        System.err.println(" [{-y, --muxCPUAffinityMask} CPU affinity mask of the engine event multiplexer thread");
         System.err.println("   Sets the CPU affinity mask of the engine event multiplexer thread (default=null)");
+        System.err.println("");
+        System.err.println("-------------------------------------------Message Bus Parameters---------------------------------------------------");
+        System.err.println(" [{-u, --busDetachedSend} sends outbound messages in a separate thread]");
+        System.err.println("   Switches on detached sender in the bus connection manager (concurrent write in a separate thread) on or off (default=false)");
+        System.err.println(" [{-n, --busDetachedSendQueueDepth} Depth of the messaging bus detached send queue");
+        System.err.println("   Sets the depth of the messaging bus detached send queue (default=1024)");
+        System.err.println(" [{-o, --busDetachedSendCPUAffinityMask} CPU affinity mask of the bus detached sender thread");
+        System.err.println("   Sets the CPU affinity mask of the bus detached sender thread (default=null)");
         System.err.println("");
         System.err.println("-----------------------------------------Store Persister Parameters-------------------------------------------------");
         System.err.println(" [{-e, --enablePersistence} whether to disable store persistence]");
@@ -176,6 +188,11 @@ final public class SRProcessor {
         final CmdLineParser.Option muxQueueDepthOption = parser.addIntegerOption('g', "muxQueueDepth");
         final CmdLineParser.Option muxCPUAffinityMaskOption = parser.addStringOption('y', "muxCPUAffinityMask");
 
+        // message bus options
+        final CmdLineParser.Option busDetachedSendOption = parser.addStringOption('u', "busDetachedSend");
+        final CmdLineParser.Option busDetachedSendQueueDepthOption = parser.addIntegerOption('n', "busDetachedSendQueueDepth");
+        final CmdLineParser.Option busDetachedSendCPUAffinityMaskOption = parser.addStringOption('o', "busDetachedSendCPUAffinityMask");
+
         // store persister related options
         final CmdLineParser.Option enablePersistenceOption = parser.addBooleanOption('e', "enablePersistence");
         final CmdLineParser.Option persisterLogLocationOption = parser.addStringOption('k', "persisterLogLocation");
@@ -184,7 +201,7 @@ final public class SRProcessor {
         final CmdLineParser.Option persisterWriteBufferSizeOption = parser.addIntegerOption('w', "persisterWriteBufferSize");
         final CmdLineParser.Option persisterFlushUsingMappedMemoryOption = parser.addBooleanOption('m', "persisterFlushUsingMappedMemory");
         final CmdLineParser.Option persisterFlushOnCommitOption = parser.addBooleanOption('f', "persisterFlushOnCommit");
-        final CmdLineParser.Option detachedOption = parser.addBooleanOption('d', "persisterDetached");
+        final CmdLineParser.Option persisterDetachedOption = parser.addStringOption('d', "persisterDetached");
         final CmdLineParser.Option persisterQueueDepthOption = parser.addIntegerOption('q', "persisterQueueDepth");
         final CmdLineParser.Option persisterWriterCPUAffinityMaskOption = parser.addStringOption('x', "persisterWriterCPUAffinityMask");
         final CmdLineParser.Option persisterReadBufferSizeOption = parser.addIntegerOption('t', "persisterReadBufferSize");
@@ -217,6 +234,17 @@ final public class SRProcessor {
                     System.setProperty(ConfigProperties.PROP_MUX_CPU_AFFINITY_MASK, muxCPUAffinityMask);
                 }
 
+                // ...message bus
+                String busDetachedSend;
+                if ((busDetachedSend = (String)parser.getOptionValue(busDetachedSendOption, null)) != null) {
+                    System.setProperty("x.apps.processor.messaging.buses.processor.detachedSend.enabled", busDetachedSend.equalsIgnoreCase("true") ? "true" : "false");
+                }
+                System.setProperty(ConfigProperties.PROP_BUS_DETACHED_SEND_QUEUE_DEPTH, String.valueOf((Integer)parser.getOptionValue(busDetachedSendQueueDepthOption, 1024)));
+                final String busDetachedSendCPUAffinityMask = (String)parser.getOptionValue(busDetachedSendCPUAffinityMaskOption, null);
+                if (busDetachedSendCPUAffinityMask != null) {
+                    System.setProperty(ConfigProperties.PROP_BUS_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK, busDetachedSendCPUAffinityMask);
+                }
+
                 // ...persister
                 final boolean enablePersistence = (Boolean)parser.getOptionValue(enablePersistenceOption, false);
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_ENABLED, enablePersistence ? "true" : "false");
@@ -226,7 +254,10 @@ final public class SRProcessor {
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_WRITE_BUFFER_SIZE, String.valueOf(parser.getOptionValue(persisterWriteBufferSizeOption, 8192)));
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_FLUSH_USING_MAPPED_MEMORY, ((Boolean)parser.getOptionValue(persisterFlushUsingMappedMemoryOption, false)) ? "true" : "false");
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_FLUSH_ON_COMMIT, ((Boolean)parser.getOptionValue(persisterFlushOnCommitOption, false)) ? "true" : "false");
-                System.setProperty(ConfigProperties.PROP_PERSISTENCE_DETACHED, ((Boolean)parser.getOptionValue(detachedOption, false)) ? "true" : "false");
+                String persisterDetached;
+                if ((persisterDetached = (String)parser.getOptionValue(persisterDetachedOption, null)) != null) {
+                    System.setProperty("x.apps.processor.storage.persistence.detachedPersist.enabled", persisterDetached.equalsIgnoreCase("true") ? "true" : "false");
+                }
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_DETACHED_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(persisterQueueDepthOption, 1024)));
                 final String persisterWriterCPUAffinityMask = (String)parser.getOptionValue(persisterWriterCPUAffinityMaskOption, null);
                 if (persisterWriterCPUAffinityMask != null) {
@@ -251,8 +282,13 @@ final public class SRProcessor {
                 System.out.println("......launchInServer=" + launchInServer);
                 System.out.println("...}");
                 System.out.println("...Engine Event Mux {");
-                System.out.println("......muxQueueDepth=" + System.getProperty(ConfigProperties.PROP_MUX_QUEUE_DEPTH));
+                System.out.println("......queueDepth=" + System.getProperty(ConfigProperties.PROP_MUX_QUEUE_DEPTH));
                 System.out.println("......muxCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_MUX_CPU_AFFINITY_MASK));
+                System.out.println("...}");
+                System.out.println("...Message Bus {");
+                System.out.println("......detached = " + (busDetachedSend != null ? busDetachedSend : "<system>"));
+                System.out.println(".........queueDepth=" + System.getProperty(ConfigProperties.PROP_BUS_DETACHED_SEND_QUEUE_DEPTH));
+                System.out.println(".........senderCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_BUS_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK));
                 System.out.println("...}");
                 System.out.println("...Store Persister {");
                 System.out.println("......enabled=" + enablePersistence);
@@ -262,7 +298,7 @@ final public class SRProcessor {
                     System.out.println("......flushUsingMappedMemory=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_FLUSH_USING_MAPPED_MEMORY));
                     System.out.println("......writeBufferSize=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_WRITE_BUFFER_SIZE));
                     System.out.println("......flushOnCommit=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_FLUSH_ON_COMMIT));
-                    System.out.println("......detached=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_DETACHED));
+                    System.out.println("......detached = " + (persisterDetached != null ? persisterDetached : "<system>"));
                     System.out.println(".........queueDepth=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_DETACHED_QUEUE_DEPTH));
                     System.out.println(".........writerCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_DETACHED_QUEUE_DRAINER_CPU_AFFINITY_MASK));
                     System.out.println("......readBufferSize=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_READ_BUFFER_SIZE));

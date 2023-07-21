@@ -22,7 +22,10 @@
                     <channels>
                         <channel name="client" join="true"/>
                     </channels>
-                    <detachedSend enabled="false"/>
+                    <detachedSend>
+                        <queueDepth>${BUS_DETACHED_SEND_QUEUE_DEPTH::1024}</queueDepth>
+                        <queueDrainerCpuAffinityMask>${BUS_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
+                    </detachedSend>
                 </bus>
             </messaging>
 
@@ -50,7 +53,7 @@
                     <autoFlushSize>${PERSISTENCE_WRITE_BUFFER_SIZE::8192}</autoFlushSize>
                     <flushUsingMappedMemory>${PERSISTENCE_FLUSH_USING_MAPPED_MEMORY::false}</flushUsingMappedMemory>
                     <flushOnCommit>${PERSISTENCE_FLUSH_ON_COMMIT::false}</flushOnCommit>
-                    <detachedPersist enabled="${PERSISTENCE_DETACHED::false}">
+                    <detachedPersist>
                         <queueDepth>${PERSISTENCE_DETACHED_QUEUE_DEPTH::1024}</queueDepth>
                         <queueDrainerCpuAffinityMask>${PERSISTENCE_DETACHED_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
                     </detachedPersist>
