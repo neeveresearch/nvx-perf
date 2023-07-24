@@ -35,11 +35,15 @@ final public class LocalMessageChannel extends MessageChannelBase {
         _binding = binding;
     }
 
+    final void onStable(final MessageView view) {
+        onMessageStability(view);
+    }
+
     @Override
     final protected boolean doSend(final MessageView view,
                                    final MessageBusBinding.FlushContext flushContext, 
                                    final int flags) throws SmaException {
-        _binding.send(view);
+        _binding.send(this, view);
         return false;
     }
 

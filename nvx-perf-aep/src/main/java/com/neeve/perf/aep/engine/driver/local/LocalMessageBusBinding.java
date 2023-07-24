@@ -43,8 +43,21 @@ import com.neeve.util.UtlGovernor;
 import com.neeve.util.UtlThread;
 
 final public class LocalMessageBusBinding extends MessageBusBindingBase implements Runnable {
+    final private class MessageAcknowledger extends Acknowledger<MessageAcknowledger> {
+        MessageAcknowledger() {}
+
+        @Override
+        final protected void doAck() {
+        }
+
+        @Override
+        final protected void doReset() {
+        }
+    }
+
     final private int _sender = hashCode();
     final private DecimalFormat _dfmt;
+    final private MessageAcknowledger _acknowledger;
     private Provider<?> _provider;
     private QuarkBuffer _serializedMessage;
     private int _serializedMessageLength;
@@ -64,23 +77,24 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
                            final IEventHandler eventHandler) throws Exception {
         super(null, userName, descriptor, eventHandler);
         _dfmt = new DecimalFormat("#,###");
+        _acknowledger = new MessageAcknowledger();
     }
 
     final private void prepareSerializedMessage(final QuarkPacket packet) {
         packet.init(_serializedMessage, 0, _serializedMessageLength);
     }
 
-    final void send(final MessageView view) throws SmaException {
-        final long preWireTs = System.nanoTime();
-
-        // this is where the message would be sent out on the outbound transport
-
-        // update stats
-        view.setPostWireSendTs(preWireTs);
-        view.setPreWireTs(preWireTs);
-
-        // update w2w latency
+    final void send(final LocalMessageChannel source, final MessageView view) throws SmaException {
         try {
+            final long preWireTs = System.nanoTime();
+
+            // this is where the message would be sent out on the outbound transport
+
+            // update stats
+            view.setPostWireSendTs(preWireTs);
+            view.setPreWireTs(preWireTs);
+
+            // update w2w latency
             LatencyRecorder.recordW2w(view.getPreWireTs() - view.getPostWireTs());
             if (_warmupCompleted) {
                 _postWarmupCount++;
@@ -96,6 +110,11 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
                 final int overallRate = (int)((_postWarmupCount * 1000000000L) / (stop - _postWarmupStart));
                 System.out.println("Processed " + _dfmt.format(_postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
                 System.out.println("Run complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
+            }
+
+            // dispatch stability
+            if (source.getQos() == MessageChannel.Qos.Guaranteed) {
+                source.onStable(view);
             }
         }
         catch (Throwable e) {
@@ -153,7 +172,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
 
     @Override
     final protected boolean doCanFail() {
-        return false;
+        return true;
     }
 
     @Override
@@ -184,6 +203,9 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             // get the channel to dispatch inbound messages on
             final LocalMessageChannel channel = (LocalMessageChannel)getMessageChannel("client");
 
+            // is channel guaranteed?
+            final boolean isChannelGuaranteed = channel.getQos() == MessageChannel.Qos.Guaranteed;
+
             // start the latency recorder
             LatencyRecorder.start(_rate, _count);
 
@@ -210,7 +232,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
                                                                                                0l,
                                                                                                now,
                                                                                                now),
-                                                              null);
+                                                              isChannelGuaranteed ? _acknowledger : null);
                     }
                     catch (Exception e) {
                         e.printStackTrace();
