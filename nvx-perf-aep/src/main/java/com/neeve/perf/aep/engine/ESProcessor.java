@@ -33,6 +33,7 @@ import com.neeve.aep.AepEngine;
 import com.neeve.aep.AepEngineDescriptor;
 import com.neeve.aep.AepMessageSender;
 import com.neeve.aep.annotations.EventHandler;
+import com.neeve.aep.event.AepEngineStoppedEvent;
 import com.neeve.config.Config;
 import com.neeve.config.VMConfigurer;
 import com.neeve.perf.serialization.Driver;
@@ -49,12 +50,17 @@ import com.neeve.util.UtlTime;
 
 @AppHAPolicy(value = AepEngine.HAPolicy.EventSourcing)
 final public class ESProcessor {
+    final private static Object mainThreadShutdownSynchronizer = new Object();
     final private Provider<Car> _provider;
+    final private int _count;
     private AepEngine _engine;
     private AepMessageSender _messageSender;
+    private int _numReceived;
+    private static boolean _engineStopped;
 
     private ESProcessor() {
         _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
+        _count = Integer.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT));
     }
 
 	@AppInjectionPoint
@@ -78,6 +84,19 @@ final public class ESProcessor {
         // send outbound
         outMessage.setPostWireTs(inMessage.getPostWireTs());
         _messageSender.sendMessage(1, outMessage);
+
+        // if all received, initiate shutdown
+        if (++_numReceived == _count) {
+            _engine.setAsLastTransaction(null, true, true);
+        }
+    }
+
+    @EventHandler
+    final public void onEngineStopped(AepEngineStoppedEvent event) {
+        synchronized(mainThreadShutdownSynchronizer) {
+            _engineStopped = true;
+            mainThreadShutdownSynchronizer.notifyAll();
+        }
     }
 
     private static void printUsage() {
@@ -350,7 +369,11 @@ final public class ESProcessor {
 
                 // block and wait. the remainder of the app is driven by inbound messages
                 // driven by the processor's engine
-                Thread.sleep(Long.MAX_VALUE);
+                synchronized(mainThreadShutdownSynchronizer) {
+                    while (!_engineStopped) {
+                        mainThreadShutdownSynchronizer.wait();
+                    }
+                }
             }
             else {
                 printUsage();
