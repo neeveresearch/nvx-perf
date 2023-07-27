@@ -285,6 +285,11 @@ final public class SRProcessor {
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_READ_BUFFER_SIZE, String.valueOf(parser.getOptionValue(persisterReadBufferSizeOption, 8192)));
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_PAGE_SIZE, String.valueOf(parser.getOptionValue(persisterPageSizeOption, 4096)));
 
+                // ... storage
+                if (enablePersistence) {
+                    System.setProperty(ConfigProperties.PROP_STORAGE_ENABLED, "true");
+                }
+
                 System.out.println("");
                 System.out.println("Parameters");
                 System.out.println("...Driver {");

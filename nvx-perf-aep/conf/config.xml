@@ -36,7 +36,7 @@
                 <queueDrainerCpuAffinityMask>${MUX_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
             </inboundEventMultiplexing>
 
-            <storage enabled="false">
+            <storage enabled="${STORAGE_ENABLED::false}">
                 <factories>
                     <factory name="com.neeve.perf.serialization.rumi.xbuf2.MessageFactory"/>
                 </factories>
