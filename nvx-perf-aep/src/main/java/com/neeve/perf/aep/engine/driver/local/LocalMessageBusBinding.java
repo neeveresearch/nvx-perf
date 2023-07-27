@@ -66,6 +66,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     private int _warmupTime;
     private int _rate;
     private String _injectorCPUAffinityMask;
+    private boolean _promptToStart;
     private long _start;
     private boolean _warmupCompleted;
     private int _postWarmupCount;
@@ -134,6 +135,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
         if (_injectorCPUAffinityMask != null && _injectorCPUAffinityMask.equalsIgnoreCase("null")) {
             _injectorCPUAffinityMask = null;
         }
+        _promptToStart = Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("prompt_to_start", "false"));
         LatencyRecorder.noWrite(Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("lw_nowrite", "false")));
         LatencyRecorder.printIntervalStats(Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("lw_print_interval_stats", "false")));
     }
@@ -198,6 +200,12 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             // affinitize
             if (_injectorCPUAffinityMask != null) {
                 UtlThread.setCPUAffinityMask(_injectorCPUAffinityMask);
+            }
+
+            // wait if prompt to start
+            if (_promptToStart) {
+                System.out.println("Please start the backup and press any key to continue...");
+                System.in.read();
             }
 
             // get the channel to dispatch inbound messages on

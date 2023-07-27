@@ -5,7 +5,7 @@
     </busProviders>
 
     <buses>
-        <bus name="processor" descriptor="local://.&amp;encoding=${DRIVER_TEST_ENCODING::xbuf2.serial}&amp;count=${DRIVER_TEST_COUNT::10000000}&amp;warmup_time=${DRIVER_TEST_WARMUP_TIME::2}&amp;rate=${DRIVER_TEST_RATE::100000}&amp;lw_nowrite=${DRIVER_LW_NOWRITE::false}&amp;lw_print_interval_stats=${DRIVER_LW_PRINT_INTERVAL_STATS::false}&amp;injector_cpu_affinity_mask=${DRIVER_INJECTOR_CPU_AFFINITY_MASK::null}">
+        <bus name="processor" descriptor="local://.&amp;encoding=${DRIVER_TEST_ENCODING::xbuf2.serial}&amp;count=${DRIVER_TEST_COUNT::10000000}&amp;warmup_time=${DRIVER_TEST_WARMUP_TIME::2}&amp;rate=${DRIVER_TEST_RATE::100000}&amp;lw_nowrite=${DRIVER_LW_NOWRITE::false}&amp;lw_print_interval_stats=${DRIVER_LW_PRINT_INTERVAL_STATS::false}&amp;injector_cpu_affinity_mask=${DRIVER_INJECTOR_CPU_AFFINITY_MASK::null}&amp;prompt_to_start=${DRIVER_PROMPT_TO_START::false}">
             <channels>
                 <channel name="client" id="1">
                     <qos>Guaranteed</qos>
@@ -44,7 +44,15 @@
                 <clustering enabled="${CLUSTERING_ENABLED::false}">
                     <discoveryDescriptor>mcast://224.0.1.200:4091&amp;localIfAddr=${CLUSTER_DISCOVERY_LOCALIFADDR::0.0.0.0}</discoveryDescriptor>
                     <localIfAddr>${CLUSTER_REPLICATOR_LOCALIFADDR::0.0.0.0}</localIfAddr>
-                    <localPort>${CLUSTER_REPLICATOR_LOCALIFPORT::0}</localPort>
+                    <localPort>${CLUSTER_REPLICATOR_LOCALPORT::0}</localPort>
+                    <detachedSend enabled="${CLUSTERING_DETACHED_SEND::false}">
+                        <queueDepth>${CLUSTERING_DETACHED_SEND_QUEUE_DEPTH::1024}</queueDepth>
+                        <queueDrainerCpuAffinityMask>${CLUSTERING_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
+                    </detachedSend>
+                    <detachedDispatch enabled="${CLUSTERING_DETACHED_DISPATCH::false}">
+                        <queueDepth>${CLUSTERING_DETACHED_DISPATCH_QUEUE_DEPTH::1024}</queueDepth>
+                        <queueDrainerCpuAffinityMask>${CLUSTERING_DETACHED_DISPATCH_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
+                    </detachedDispatch>
                 </clustering>
 
                 <persistenceQuorum>${PERSISTENCE_QUORUM::1}</persistenceQuorum>

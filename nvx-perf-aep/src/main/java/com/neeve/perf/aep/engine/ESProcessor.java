@@ -169,6 +169,33 @@ final public class ESProcessor {
         System.err.println(" [{-p, --persisterPageSize} specifies the disk subsystem page size]");
         System.err.println("   Specifies (in bytes) the page size to use when reading/writing from/to disk (default=8192)");
         System.err.println("");
+        System.err.println("-----------------------------------------Store Clustering Parameters------------------------------------------------");
+        System.err.println(" [{-v, --enableClustering} whether to disable store clustering]");
+        System.err.println("   Specifies whether clustering is disabled (default=false)");
+        System.err.println("--------------------------------------------------------------------------------------------------------------------");
+        System.err.println(" [{-I, --clusteringLocalIfAddr} specifies the local interface to use for cluster replication]");
+        System.err.println("   Specifies the local interface to use for cluster replication (default=0.0.0.0)");
+        System.err.println(" [{-P, --clusteringLocalPort} specifies the local port to use for cluster replication]");
+        System.err.println("   Specifies the local port to use for cluster replication (default=0)");
+        System.err.println("--------------------------------------------------------------------------------------------------------------------");
+        System.err.println(" [{-S, --clusteringDetachedSend} run store replicator in detached send mode]");
+        System.err.println("   Switches on detached send for cluster replication (concurrent send in a separate thread) on or off (default=false)");
+        System.err.println(" [{-Q, --clusteringDetachedSendQueueDepth} queue depth for detached cluster replication send]");
+        System.err.println("   Specifies the queue depth for detached cluster replication send (default=1024)");
+        System.err.println("   <This option only applies to detached cluster replication send>");
+        System.err.println(" [{-A, --clusteringDetachedSenderCPUAffinityMask} writer thread CPU affinity mask for the cluster replication detached sender]");
+        System.err.println("   Specifies the cluster replication detached sender thread CPU affinity mask. (default=null)");
+        System.err.println("   <This option only applies to detached cluster replication send>");
+        System.err.println("--------------------------------------------------------------------------------------------------------------------");
+        System.err.println(" [{-D, --clusteringDetachedDispatch} run store replicator in detached dispatch mode]");
+        System.err.println("   Switches on detached dispatch for cluster replication (concurrent dispatch in a separate thread) on or off (default=false)");
+        System.err.println(" [{-R, --clusteringDetachedDispatchQueueDepth} queue depth for detached cluster replication dispatch]");
+        System.err.println("   Specifies the queue depth for detached cluster replication dispatch (default=1024)");
+        System.err.println("   <This option only applies to detached cluster replication dispatch>");
+        System.err.println(" [{-B, --clusteringDetachedDispatcherCPUAffinityMask} writer thread CPU affinity mask for the cluster replication detached dispatcher]");
+        System.err.println("   Specifies the cluster replication detached dispatcher thread CPU affinity mask. (default=null)");
+        System.err.println("   <This option only applies to detached cluster replication dispatch>");
+        System.err.println("");
         System.err.println("----------------------------------------------------Help------------------------------------------------------------");
         System.err.println(" [{-h, --help} print this help string]");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
@@ -211,6 +238,17 @@ final public class ESProcessor {
         final CmdLineParser.Option persisterWriterCPUAffinityMaskOption = parser.addStringOption('x', "persisterWriterCPUAffinityMask");
         final CmdLineParser.Option persisterReadBufferSizeOption = parser.addIntegerOption('t', "persisterReadBufferSize");
         final CmdLineParser.Option persisterPageSizeOption = parser.addIntegerOption('p', "persisterPageSize");
+
+        // store clustering related options
+        final CmdLineParser.Option enableClusteringOption = parser.addBooleanOption('v', "enableClustering");
+        final CmdLineParser.Option clusteringLocalIfAddrOption = parser.addStringOption('I', "clusteringLocalIfAddr");
+        final CmdLineParser.Option clusteringLocalPortOption = parser.addStringOption('P', "clusteringLocalPort");
+        final CmdLineParser.Option clusteringDetachedSendOption = parser.addBooleanOption('S', "clusteringDetachedSend");
+        final CmdLineParser.Option clusteringDetachedSendQueueDepthOption = parser.addIntegerOption('Q', "clusteringDetachedSendQueueDepth");
+        final CmdLineParser.Option clusteringDetachedSenderCPUAffinityMaskOption = parser.addStringOption('A', "clusteringDetachedSenderCPUAffinityMask");
+        final CmdLineParser.Option clusteringDetachedDispatchOption = parser.addBooleanOption('S', "clusteringDetachedDispatch");
+        final CmdLineParser.Option clusteringDetachedDispatchQueueDepthOption = parser.addIntegerOption('Q', "clusteringDetachedDispatchQueueDepth");
+        final CmdLineParser.Option clusteringDetachedDispatcherCPUAffinityMaskOption = parser.addStringOption('A', "clusteringDetachedDispatcherCPUAffinityMask");
 
         // help 
         final CmdLineParser.Option helpOption = parser.addBooleanOption('h', "help");
@@ -271,9 +309,34 @@ final public class ESProcessor {
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_READ_BUFFER_SIZE, String.valueOf(parser.getOptionValue(persisterReadBufferSizeOption, 8192)));
                 System.setProperty(ConfigProperties.PROP_PERSISTENCE_PAGE_SIZE, String.valueOf(parser.getOptionValue(persisterPageSizeOption, 4096)));
 
+                // ... clustering
+                final boolean enableClustering = (Boolean)parser.getOptionValue(enableClusteringOption, false);
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_ENABLED, enableClustering ? "true" : "false");
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_IF_ADDR, (String)parser.getOptionValue(clusteringLocalIfAddrOption, "0.0.0.0"));
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_PORT, (String)parser.getOptionValue(clusteringLocalPortOption, "0"));
+                boolean clusteringDetachedSend = (Boolean)parser.getOptionValue(clusteringDetachedSendOption, false);
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND, clusteringDetachedSend ? "true" : "false");
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(clusteringDetachedSendQueueDepthOption, 1024)));
+                final String clusteringDetachedSenderCPUAffinityMask = (String)parser.getOptionValue(clusteringDetachedSenderCPUAffinityMaskOption, null);
+                if (clusteringDetachedSenderCPUAffinityMask != null) {
+                    System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK, clusteringDetachedSenderCPUAffinityMask);
+                }
+                boolean clusteringDetachedDispatch = (Boolean)parser.getOptionValue(clusteringDetachedDispatchOption, false);
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH, clusteringDetachedDispatch ? "true" : "false");
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(clusteringDetachedDispatchQueueDepthOption, 1024)));
+                final String clusteringDetachedDispatcherCPUAffinityMask = (String)parser.getOptionValue(clusteringDetachedDispatcherCPUAffinityMaskOption, null);
+                if (clusteringDetachedDispatcherCPUAffinityMask != null) {
+                    System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH_QUEUE_DRAINER_CPU_AFFINITY_MASK, clusteringDetachedDispatcherCPUAffinityMask);
+                }
+                
                 // ... storage
-                if (enablePersistence) {
+                if (enablePersistence || enableClustering) {
                     System.setProperty(ConfigProperties.PROP_STORAGE_ENABLED, "true");
+                }
+
+                // ...prompt top start
+                if (enableClustering) {
+                    System.setProperty(ConfigProperties.PROP_DRIVER_PROMPT_TO_START, "true");
                 }
 
                 System.out.println("");
@@ -315,12 +378,25 @@ final public class ESProcessor {
                     System.out.println("......pageSize=" + System.getProperty(ConfigProperties.PROP_PERSISTENCE_PAGE_SIZE));
                 }
                 System.out.println("...}");
+                System.out.println("...Store Replicator {");
+                System.out.println("......enabled=" + enableClustering);
+                if (enableClustering) {
+                    System.out.println("......localIfAddr=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_IF_ADDR));
+                    System.out.println("......localPort=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_PORT));
+                    System.out.println("......detachedSend= " + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND));
+                    System.out.println(".........queueDepth=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DEPTH));
+                    System.out.println(".........senderCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK));
+                    System.out.println("......detachedDispatch= " + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH));
+                    System.out.println(".........queueDepth=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH_QUEUE_DEPTH));
+                    System.out.println(".........dispatcherCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH_QUEUE_DRAINER_CPU_AFFINITY_MASK));
+                }
+                System.out.println("...}");
                 System.out.println("");
 
                 // enable affinitization
-                if (injectorCPUAffinityMask != null || muxCPUAffinityMask != null || (enablePersistence && persisterWriterCPUAffinityMask != null)) {
+                if (injectorCPUAffinityMask != null || muxCPUAffinityMask != null || (busDetachedSend != null && busDetachedSend.equalsIgnoreCase("true") && busDetachedSendCPUAffinityMask != null) || (enablePersistence && persisterDetached != null && persisterDetached.equalsIgnoreCase("true") && persisterWriterCPUAffinityMask != null) || (enableClustering && clusteringDetachedSend && clusteringDetachedSenderCPUAffinityMask != null) || (enableClustering &&  clusteringDetachedDispatch && clusteringDetachedDispatcherCPUAffinityMask != null)) {
                     System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
-                    if (injectorCPUAffinityMask == null || muxCPUAffinityMask == null || (enablePersistence && persisterWriterCPUAffinityMask == null)) {
+                    if (injectorCPUAffinityMask == null || muxCPUAffinityMask == null || (busDetachedSend != null && busDetachedSend.equalsIgnoreCase("true") && busDetachedSendCPUAffinityMask == null) || (enablePersistence && persisterDetached != null && persisterDetached.equalsIgnoreCase("true") && persisterWriterCPUAffinityMask == null) || (enableClustering && clusteringDetachedSend && clusteringDetachedSenderCPUAffinityMask == null) || (enableClustering &&  clusteringDetachedDispatch && clusteringDetachedDispatcherCPUAffinityMask == null)) {
                         System.out.println("");
                         System.out.println("*****************************************************************************");
                         System.out.println("                               WARNING!!!                                    ");
