@@ -71,7 +71,6 @@
                 </persistence>
             </storage>
 
-            <replicationPolicy>Asynchronous</replicationPolicy>
             <setSupportMetadata>false</setSupportMetadata>
             <setOutboundSequenceNumbers>false</setOutboundSequenceNumbers>
             <captureTransactionLatencyStats>false</captureTransactionLatencyStats>
