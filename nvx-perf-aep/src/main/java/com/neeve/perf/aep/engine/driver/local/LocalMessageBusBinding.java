@@ -39,7 +39,6 @@ import com.neeve.sma.MessageLatencyManager;
 import com.neeve.sma.MessageView;
 import com.neeve.sma.SmaException;
 import com.neeve.sma.impl.MessageBusBindingBase;
-import com.neeve.util.UtlGovernor;
 import com.neeve.util.UtlThread;
 
 final public class LocalMessageBusBinding extends MessageBusBindingBase implements Runnable {
@@ -97,14 +96,8 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
 
             // update w2w latency
             LatencyRecorder.recordW2w(view.getPreWireTs() - view.getPostWireTs());
-            if (_warmupCompleted) {
-                _postWarmupCount++;
-            }
-            if (!_warmupCompleted && preWireTs - _start > (_warmupTime * 1000000000L)) {
-                System.out.println("Warm up complete.");
-                _postWarmupStart = preWireTs;
-                _warmupCompleted = true;
-            }
+
+            // check and process if run is done
             if (++_numReceived == _count) {
                 final long stop = System.nanoTime();
                 LatencyRecorder.stop();
@@ -215,38 +208,53 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             final boolean isChannelGuaranteed = channel.getQos() == MessageChannel.Qos.Guaranteed;
 
             // start the latency recorder
-            LatencyRecorder.start(_rate, _count);
+            // LatencyRecorder.start(_rate, _count);
 
             // run
+            int i = 0;
+            final QuarkPacket packet = new QuarkPacket();
             _start = System.nanoTime();
-            UtlGovernor.run(_count, _rate, new Runnable() {
-                final private QuarkPacket packet = new QuarkPacket();
+            final long nanosPerMsg = _rate > 0 ? (1000000000l / _rate) : 0;
+            long next = _start + nanosPerMsg;
+            LatencyRecorder.start(_rate, _count);
+            while (i < _count) {
+                final long current = System.nanoTime();
+                if (current >= next) {
+                    prepareSerializedMessage(packet);
+                    final long now = System.nanoTime();
+                    LocalMessageBusBinding.this.onMessage(channel,
+                                                          LocalMessageBusBinding.this.wrap(packet,
+                                                                                           _provider.vfid(),
+                                                                                           _provider.otype(),
+                                                                                           _provider.encoding(),
+                                                                                           _sender,
+                                                                                           0,
+                                                                                           0l,
+                                                                                           null,
+                                                                                           0l,
+                                                                                           0l,
+                                                                                           now,
+                                                                                           now),
+                                                          isChannelGuaranteed ? _acknowledger : null);
 
-                @Override
-                final public void run() {
-                    try {
-                        prepareSerializedMessage(packet);
-                        final long now = System.nanoTime();
-                        LocalMessageBusBinding.this.onMessage(channel,
-                                                              LocalMessageBusBinding.this.wrap(packet,
-                                                                                               _provider.vfid(),
-                                                                                               _provider.otype(),
-                                                                                               _provider.encoding(),
-                                                                                               _sender,
-                                                                                               0,
-                                                                                               0l,
-                                                                                               null,
-                                                                                               0l,
-                                                                                               0l,
-                                                                                               now,
-                                                                                               now),
-                                                              isChannelGuaranteed ? _acknowledger : null);
+
+                    // update counters
+                    next += nanosPerMsg;
+                    i++;
+                    if (_warmupCompleted) {
+                        _postWarmupCount++;
                     }
-                    catch (Exception e) {
-                        e.printStackTrace();
+                    if (!_warmupCompleted && current - _start > (_warmupTime * 1000000000L)) {
+                        System.out.println("Warmup complete. Waiting for queues to empty.");
+                        while (i > _numReceived) {
+                            System.out.println("...[sent=" + i + ", rcvd=" + _numReceived + "].");
+                            Thread.sleep(100);
+                        }
+                        _postWarmupStart = System.nanoTime();
+                        _warmupCompleted = true;
                     }
                 }
-            });
+            }
         }
         catch (Throwable e) {
             e.printStackTrace();
