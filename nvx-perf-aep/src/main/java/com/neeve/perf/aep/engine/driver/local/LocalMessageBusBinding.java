@@ -207,9 +207,6 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             // is channel guaranteed?
             final boolean isChannelGuaranteed = channel.getQos() == MessageChannel.Qos.Guaranteed;
 
-            // start the latency recorder
-            // LatencyRecorder.start(_rate, _count);
-
             // run
             int i = 0;
             final QuarkPacket packet = new QuarkPacket();
