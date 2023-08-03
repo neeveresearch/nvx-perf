@@ -64,6 +64,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     private int _count;
     private int _warmupTime;
     private int _rate;
+    private boolean _emptyMessage;
     private String _injectorCPUAffinityMask;
     private boolean _promptToStart;
     private long _start;
@@ -119,16 +120,17 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     @Override
     final protected void doOpen() throws SmaException {
         _provider = Driver.getProvider(descriptor.getProviderConfig().getProperty("encoding", "xbuf2.serial"));
-        _serializedMessage = QuarkBuffer.create(1024, true);
-        _serializedMessageLength = (((Car)_provider.create(true)).serializeTo(_serializedMessage, 0));
         _count = Integer.parseInt(descriptor.getProviderConfig().getProperty("count", "10000000"));
         _warmupTime = Integer.parseInt(descriptor.getProviderConfig().getProperty("warmup_time", "2"));
         _rate = Integer.parseInt(descriptor.getProviderConfig().getProperty("rate", "100000"));
+        _emptyMessage = Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("empty_message", "false"));
         _injectorCPUAffinityMask = descriptor.getProviderConfig().getProperty("injector_cpu_affinity_mask", null);
         if (_injectorCPUAffinityMask != null && _injectorCPUAffinityMask.equalsIgnoreCase("null")) {
             _injectorCPUAffinityMask = null;
         }
         _promptToStart = Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("prompt_to_start", "false"));
+        _serializedMessage = QuarkBuffer.create(1024, true);
+        _serializedMessageLength = (((Car)_provider.create(!_emptyMessage)).serializeTo(_serializedMessage, 0));
         LatencyRecorder.noWrite(Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("lw_nowrite", "false")));
         LatencyRecorder.printIntervalStats(Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("lw_print_interval_stats", "false")));
     }
@@ -188,6 +190,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             System.out.println("...Count=" + _count);
             System.out.println("...Warmup Time=" + _warmupTime);
             System.out.println("...Rate=" + _rate);
+            System.out.println("...EmptyMessage=" + _emptyMessage);
             System.out.println("...Affinity=" + _injectorCPUAffinityMask);
 
             // affinitize

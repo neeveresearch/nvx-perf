@@ -5,7 +5,7 @@
     </busProviders>
 
     <buses>
-        <bus name="processor" descriptor="local://.&amp;encoding=${DRIVER_TEST_ENCODING::xbuf2.serial}&amp;count=${DRIVER_TEST_COUNT::10000000}&amp;warmup_time=${DRIVER_TEST_WARMUP_TIME::2}&amp;rate=${DRIVER_TEST_RATE::100000}&amp;lw_nowrite=${DRIVER_LW_NOWRITE::false}&amp;lw_print_interval_stats=${DRIVER_LW_PRINT_INTERVAL_STATS::false}&amp;injector_cpu_affinity_mask=${DRIVER_INJECTOR_CPU_AFFINITY_MASK::null}&amp;prompt_to_start=${DRIVER_PROMPT_TO_START::false}">
+        <bus name="processor" descriptor="local://.&amp;encoding=${DRIVER_TEST_ENCODING::xbuf2.serial}&amp;count=${DRIVER_TEST_COUNT::10000000}&amp;warmup_time=${DRIVER_TEST_WARMUP_TIME::2}&amp;rate=${DRIVER_TEST_RATE::100000}&amp;empty_message=${DRIVER_TEST_EMPTY_MESSAGE::false}&amp;lw_nowrite=${DRIVER_LW_NOWRITE::false}&amp;lw_print_interval_stats=${DRIVER_LW_PRINT_INTERVAL_STATS::false}&amp;injector_cpu_affinity_mask=${DRIVER_INJECTOR_CPU_AFFINITY_MASK::null}&amp;prompt_to_start=${DRIVER_PROMPT_TO_START::false}">
             <channels>
                 <channel name="client" id="1">
                     <qos>Guaranteed</qos>

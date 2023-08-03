@@ -157,7 +157,7 @@ final public class Driver extends AnnotatedCommand {
         System.out.println("  Producer CPU Affinity Mask.." + producerCPUAffinityMask);
         System.out.println("  Consumer CPU Affinity Mask.." + consumerCPUAffinityMask);
         System.out.println("  nv.optimizefor.............." + (XRuntime.optimizeForThroughput() ? "Throughput" : (XRuntime.optimizeForLatency() ? "Latency" : "None")));
-        System.out.println("  nv.conserveMemory..........." + XRuntime.conserveMemory());
+        System.out.println("  nv.conserveMemory..........." + XRuntime.optimizeMemoryUsage());
         System.out.println("  nv.conservecpu.............." + XRuntime.conserveCPU());
         System.out.println("  nv.enablecpuaffinitymask...." + UtlThread.cpuAffinityMasksEnabled());
 

@@ -53,6 +53,7 @@ final public class ESProcessor {
     final private static Object mainThreadShutdownSynchronizer = new Object();
     final private Provider<Car> _provider;
     final private int _count;
+    final private boolean _emptyMessage;
     private AepEngine _engine;
     private AepMessageSender _messageSender;
     private int _numReceived;
@@ -61,6 +62,7 @@ final public class ESProcessor {
     private ESProcessor() {
         _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
         _count = Integer.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT));
+        _emptyMessage = Boolean.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_EMPTY_MESSAGE));
     }
 
 	@AppInjectionPoint
@@ -79,7 +81,7 @@ final public class ESProcessor {
         _provider.decode(inMessage);
 
         // prepare outbound message
-        final IRogMessage outMessage = _provider.create(true);
+        final IRogMessage outMessage = _provider.create(!_emptyMessage);
 
         // send outbound
         outMessage.setPostWireTs(inMessage.getPostWireTs());
@@ -110,6 +112,8 @@ final public class ESProcessor {
         System.err.println("   Warmup time, in seconds, for calculation of throughput stats (default=2 (2 seconds))");
         System.err.println(" [{-r, --rate} commit rate]");
         System.err.println("   Rate at which to send messages (default=100,000 (unlimited))");
+        System.err.println(" [{-E, --emptyMessage} do not populate the inbound and outbound messages]");
+        System.err.println("   Specifies that inbound and outbound message should not be populated (false))");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-a, --noLatencyWrites} don't write latencies to a file");
         System.err.println("   Indicates that latencies should not be written to a file (default=false)");
@@ -209,6 +213,7 @@ final public class ESProcessor {
         final CmdLineParser.Option countOption = parser.addIntegerOption('c', "count");
         final CmdLineParser.Option warmupTimeOption = parser.addIntegerOption('t', "warmupTime");
         final CmdLineParser.Option rateOption = parser.addIntegerOption('r', "rate");
+        final CmdLineParser.Option emptyMessageOption = parser.addBooleanOption('E', "emptyMessage");
         final CmdLineParser.Option noLatencyWritesOption = parser.addBooleanOption('a', "noLatencyWrites");
         final CmdLineParser.Option printIntervalStatsOption = parser.addBooleanOption('b', "printIntervalStats");
         final CmdLineParser.Option injectorCPUAffinityMaskOption = parser.addStringOption('j', "injectorCPUAffinityMask");
@@ -263,6 +268,7 @@ final public class ESProcessor {
                 System.setProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT, String.valueOf((Integer)parser.getOptionValue(countOption, 10000000)));
                 System.setProperty(ConfigProperties.PROP_DRIVER_TEST_WARMUP_TIME, String.valueOf((Integer)parser.getOptionValue(warmupTimeOption, 2)));
                 System.setProperty(ConfigProperties.PROP_DRIVER_TEST_RATE, String.valueOf((Integer)parser.getOptionValue(rateOption, 100000)));
+                System.setProperty(ConfigProperties.PROP_DRIVER_TEST_EMPTY_MESSAGE, (Boolean)parser.getOptionValue(emptyMessageOption, false) ? "true" : "false");
                 System.setProperty(ConfigProperties.PROP_DRIVER_LW_NOWRITE, ((Boolean)parser.getOptionValue(noLatencyWritesOption, false)) ? "true" : "false");
                 System.setProperty(ConfigProperties.PROP_DRIVER_LW_PRINT_INTERVAL_STATS, (Boolean)parser.getOptionValue(printIntervalStatsOption, false) ? "true" : "false");
                 final String injectorCPUAffinityMask = (String)parser.getOptionValue(injectorCPUAffinityMaskOption, null);
@@ -346,6 +352,7 @@ final public class ESProcessor {
                 System.out.println("......count=" + System.getProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT));
                 System.out.println("......warmupTime=" + System.getProperty(ConfigProperties.PROP_DRIVER_TEST_WARMUP_TIME));
                 System.out.println("......rate=" + System.getProperty(ConfigProperties.PROP_DRIVER_TEST_RATE));
+                System.out.println("......emptyMessage=" + System.getProperty(ConfigProperties.PROP_DRIVER_TEST_EMPTY_MESSAGE));
                 System.out.println("......noLatencyWrites=" + System.getProperty(ConfigProperties.PROP_DRIVER_LW_NOWRITE));
                 System.out.println("......printIntervalStats=" + System.getProperty(ConfigProperties.PROP_DRIVER_LW_PRINT_INTERVAL_STATS));
                 System.out.println("......injectorCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_DRIVER_INJECTOR_CPU_AFFINITY_MASK));
