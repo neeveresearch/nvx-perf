@@ -75,10 +75,12 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     private boolean _promptToStart;
     private long _start;
     private boolean _warmupCompleted;
+    private int _warmupCount;
     private int _postWarmupCount;
     private long _postWarmupStart;
     private int _postWarmupRate;
     private int _numReceived;
+    private volatile boolean _warmupDone;
     private volatile boolean _done;
 
     LocalMessageBusBinding(final String userName,
@@ -161,23 +163,27 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             // update w2w latency
             LatencyRecorder.recordW2w(view.getPreWireTs() - view.getPostWireTs());
 
-            // check and process if run is done
-            if (++_numReceived == _count) {
+            // update num received
+            ++_numReceived;
+
+            // warmup done?
+            if (_numReceived == _warmupCount) {
+                _warmupDone = true;
+            }
+
+            // full run done?
+            if (_numReceived == _count) {
                 final long stop = System.nanoTime();
                 LatencyRecorder.stop(_count - _postWarmupCount, _stats);
                 _postWarmupRate = (int)((_postWarmupCount * 1000000000L) / (stop - _postWarmupStart));
                 System.out.println("Processed " + _dfmt.format(_postWarmupCount) + " messages @ " + _dfmt.format(_postWarmupRate) + " msgs/sec post warmup.");
                 System.out.println("Run complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
+                _done = true;
             }
 
             // dispatch stability
             if (source.getQos() == MessageChannel.Qos.Guaranteed) {
                 source.onStable(view);
-            }
-
-            // done?
-            if (_numReceived == _count) {
-                _done = true;
             }
         }
         catch (Throwable e) {
@@ -191,6 +197,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
         _count = Integer.parseInt(descriptor.getProviderConfig().getProperty("count", "10000000"));
         _warmupTime = Integer.parseInt(descriptor.getProviderConfig().getProperty("warmup_time", "2"));
         _rate = Integer.parseInt(descriptor.getProviderConfig().getProperty("rate", "100000"));
+        _warmupCount = _rate * _warmupTime;
         _emptyMessage = Boolean.parseBoolean(descriptor.getProviderConfig().getProperty("empty_message", "false"));
         _injectorCPUAffinityMask = descriptor.getProviderConfig().getProperty("injector_cpu_affinity_mask", null);
         if (_injectorCPUAffinityMask != null && _injectorCPUAffinityMask.equalsIgnoreCase("null")) {
@@ -299,9 +306,9 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
                     if (_warmupCompleted) {
                         _postWarmupCount++;
                     }
-                    if (!_warmupCompleted && current - _start > (_warmupTime * 1000000000L)) {
+                    else if (i == _warmupCount) {
                         // warmup complete. wait for queues to empty...
-                        while (i > _numReceived);
+                        while (!_warmupDone);
                         _postWarmupStart = System.nanoTime();
                         _warmupCompleted = true;
                     }
