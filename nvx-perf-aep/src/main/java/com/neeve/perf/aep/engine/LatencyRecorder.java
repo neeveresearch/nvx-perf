@@ -61,8 +61,8 @@ final public class LatencyRecorder {
         _lw_w2w.write((int)(val - _utlTimeOverhead));
     }
 
-    final public static void stop() throws Exception {
-        _lw_w2w.close();
+    final public static void stop(final int warmupCount, final LatencyWriter.Stats stats) throws Exception {
+        _lw_w2w.close(warmupCount, stats);
     }
 }
 

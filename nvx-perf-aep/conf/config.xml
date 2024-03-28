@@ -10,6 +10,9 @@
                 <channel name="client" id="1">
                     <qos>Guaranteed</qos>
                 </channel>
+                <channel name="control" id="100">
+                    <qos>BestEffort</qos>
+                </channel>
             </channels>
         </bus>
     </buses>
@@ -18,11 +21,13 @@
         <app name="processor" mainClass="com.neeve.perf.aep.engine.es.Processor">
             <messaging>
                 <factories>
+                    <factory name="com.neeve.perf.aep.engine.messages.MessageFactory"/>
                     <factory name="com.neeve.perf.serialization.rumi.xbuf2.MessageFactory"/>
                 </factories>
                 <bus name="processor">
                     <channels>
                         <channel name="client" join="true"/>
+                        <channel name="control" join="true"/>
                     </channels>
                     <detachedSend>
                         <queueDepth>${BUS_DETACHED_SEND_QUEUE_DEPTH::1024}</queueDepth>
@@ -38,6 +43,7 @@
 
             <storage enabled="${STORAGE_ENABLED::false}">
                 <factories>
+                    <factory name="com.neeve.perf.aep.engine.messages.MessageFactory"/>
                     <factory name="com.neeve.perf.serialization.rumi.xbuf2.MessageFactory"/>
                 </factories>
 

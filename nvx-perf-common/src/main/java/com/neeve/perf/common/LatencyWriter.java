@@ -91,6 +91,44 @@ final public class LatencyWriter {
         }
     }
 
+    final public static class Stats {
+        public int pct50;
+        public int pct75;
+        public int pct90;
+        public int pct99;
+        public int pct999;
+        public int pct9999;
+        public int pct99999;
+        public int pct999999;
+        public int max;
+        public double avgd;
+        public double avgo;
+
+        final void set(final int pct50, 
+                       final int pct75, 
+                       final int pct90, 
+                       final int pct99, 
+                       final int pct999,
+                       final int pct9999,
+                       final int pct99999,
+                       final int pct999999,
+                       final int max,
+                       final double avgd,
+                       final double avgo) {
+            this.pct50 = pct50;
+            this.pct75 = pct75;
+            this.pct90 = pct90;
+            this.pct99 = pct99;
+            this.pct999 = pct999;
+            this.pct9999 = pct9999;
+            this.pct99999 = pct99999;
+            this.pct999999 = pct999999;
+            this.max = max;
+            this.avgd = avgd;
+            this.avgo = avgo;
+        }
+    }
+
     final private String _name;
     final private String _filename;
     final private boolean _printHeader;
@@ -234,44 +272,60 @@ final public class LatencyWriter {
         System.out.println("+------------------------------------------------------------------------------------------------------------------------------------------+");
     }
 
-    final private void printLatencies(final long latencies, final long itotal, final long total, final int icount, final int count, final int max) {
+    final private void printLatencies(final long latencies, final long itotal, final long total, final int icount, final int count, final int max, final Stats stats) {
+        final int pct50 = percentile(latencies, icount, 50.0);
+        final int pct75 = percentile(latencies, icount, 75.0);
+        final int pct90 = percentile(latencies, icount, 90.0);
+        final int pct99 = percentile(latencies, icount, 99.0);
+        final int pct999 = percentile(latencies, icount, 99.9);
+        final int pct9999 = percentile(latencies, icount, 99.99);
+        final int pct99999 = percentile(latencies, icount, 99.999);
+        final int pct999999 = percentile(latencies, icount, 99.9999);
+        final double avgd = ((double)itotal) / icount;
+        final double avgo = ((double)total) / count;
+
         if (_printStatsInNanos) {
             System.out.format(" %10s %14d %8d %8d %8d %8d %10d %11d %12d %13d %8d %8.2f %8.2f\n",
                               _name,
                               icount,
-                              percentile(latencies, icount, 50.0),
-                              percentile(latencies, icount, 75.0),
-                              percentile(latencies, icount, 90.0),
-                              percentile(latencies, icount, 99.0),
-                              percentile(latencies, icount, 99.9),
-                              percentile(latencies, icount, 99.99),
-                              percentile(latencies, icount, 99.999),
-                              percentile(latencies, icount, 99.9999),
+                              pct50,
+                              pct75,
+                              pct90,
+                              pct99,
+                              pct999,
+                              pct9999,
+                              pct99999,
+                              pct999999,
                               max,
-                              ((double)itotal) / icount,
-                              ((double)total) / count);
+                              avgd,
+                              avgo);
         }
         else {
             System.out.format(" %10s %14d %8.2f %8.2f %8.2f %8.2f %10.2f %11.2f %12.2f %13.2f %8.2f %8.2f %8.2f\n",
                               _name,
                               icount,
-                              ((double)percentile(latencies, icount, 50.0)) / 1000,
-                              ((double)percentile(latencies, icount, 75.0)) / 1000,
-                              ((double)percentile(latencies, icount, 90.0)) / 1000,
-                              ((double)percentile(latencies, icount, 99.0)) / 1000,
-                              ((double)percentile(latencies, icount, 99.9)) / 1000,
-                              ((double)percentile(latencies, icount, 99.99)) / 1000,
-                              ((double)percentile(latencies, icount, 99.999)) / 1000,
-                              ((double)percentile(latencies, icount, 99.9999)) / 1000,
+                              ((double)pct50) / 1000,
+                              ((double)pct75) / 1000,
+                              ((double)pct90) / 1000,
+                              ((double)pct99) / 1000,
+                              ((double)pct999) / 1000,
+                              ((double)pct9999) / 1000,
+                              ((double)pct99999) / 1000,
+                              ((double)pct999999) / 1000,
                               ((double)max) / 1000,
-                              (((double)itotal) / icount) / 1000,
-                              (((double)total) / count) / 1000);
+                              avgd / 1000,
+                              avgo / 1000);
+        }
+
+        if (stats != null) {
+            stats.set(pct50, pct75, pct90, pct99, pct999, pct9999, pct99999, pct999999, max, avgd, avgo);
         }
     }
 
-    final private void printLatenciesFromFile() {
+    final private void printLatenciesFromFile(final int warmupCount, final Stats stats) {
         // allocate memory to hold all the latencies in the file
-        final long latencies = QuarkBuffer.allocateMemoryBlock(_counters.count * 4, true);
+        final int count = _counters.count - warmupCount;
+        final long latencies = QuarkBuffer.allocateMemoryBlock(count * 4, true);
         try {
             // read the file
             try {
@@ -282,13 +336,16 @@ final public class LatencyWriter {
                         final DataInputStream dis = new DataInputStream(bis);
                         int max = 0;
                         long total = 0;
+                        int j = 0;
                         for (int i = 0; i < _counters.count; i++) {
                             final int latency = dis.readInt();
-                            QuarkBuffer.putInt(latencies, i * 4, latency);
-                            total += latency;
-                            if (latency > max) max = latency;
+                            if (i >= warmupCount) {
+                                QuarkBuffer.putInt(latencies, j++ * 4, latency);
+                                total += latency;
+                                if (latency > max) max = latency;
+                            }
                         }
-                        printLatencies(latencies, total, total, _counters.count, _counters.count, max);
+                        printLatencies(latencies, total, total, count, count, max, stats);
                     }
                     finally {
                         bis.close();
@@ -321,7 +378,7 @@ final public class LatencyWriter {
 
         // print latencies if configured to so
         if (_printIntervalStats) {
-            printLatencies(latencies, itotal, total, icount, count, max);
+            printLatencies(latencies, itotal, total, icount, count, max, null);
         }
 
         // write to file if configured to do so
@@ -334,6 +391,56 @@ final public class LatencyWriter {
                              _mappedFile.getNativeAddress(),
                              (count - icount) * 4,
                              icount * 4);
+        }
+    }
+
+    /**
+     * Close a latency writer 
+     */
+    final private void close(final boolean finish, final Stats stats, final int warmupCount) throws Exception {
+        // validate state
+        if (_state == State.Closed) return;
+
+        try {
+            // stop
+            stop();
+
+            // latencies written to a file?
+            if (_filename != null) {
+                // release file resources
+                // ...do this now so that all buffered data is flushed to the file
+                _mappedFile.dispose();
+                _file.close();
+
+                // yes, if print header is configured, then print header/separator
+                if (_printHeader) {
+                    // print header if interval stats are not enabled i.e. the header was
+                    // not printed at start. otherwise, print just the separator to separate
+                    // the interval latencies for the full run
+                    if (!_printIntervalStats) {
+                        printHeader();
+                    }
+                    else {
+                        printSeparator();
+                    }
+                }
+
+                // print latencies for full run
+                printLatenciesFromFile(warmupCount, stats);
+            }
+
+            // finally, if print header is configured, then print separator
+            if (finish && _printHeader && (_filename != null || _printIntervalStats)) {
+                printSeparator();
+                System.out.println("");
+            }
+
+            // free counter resources
+            _counters.done();
+            
+        }
+        finally {
+            _state = State.Closed;
         }
     }
 
@@ -413,50 +520,17 @@ final public class LatencyWriter {
      * @param finish Whether the latency writing is finished
      */
     final public void close(final boolean finish) throws Exception {
-        // validate state
-        if (_state == State.Closed) return;
+        close(finish, null, 0);
+    }
 
-        try {
-            // stop
-            stop();
-
-            // latencies written to a file?
-            if (_filename != null) {
-                // release file resources
-                // ...do this now so that all buffered data is flushed to the file
-                _mappedFile.dispose();
-                _file.close();
-
-                // yes, if print header is configured, then print header/separator
-                if (_printHeader) {
-                    // print header if interval stats are not enabled i.e. the header was
-                    // not printed at start. otherwise, print just the separator to separate
-                    // the interval latencies for the full run
-                    if (!_printIntervalStats) {
-                        printHeader();
-                    }
-                    else {
-                        printSeparator();
-                    }
-                }
-
-                // print latencies for full run
-                printLatenciesFromFile();
-            }
-
-            // finally, if print header is configured, then print separator
-            if (finish && _printHeader && (_filename != null || _printIntervalStats)) {
-                printSeparator();
-                System.out.println("");
-            }
-
-            // free counter resources
-            _counters.done();
-            
-        }
-        finally {
-            _state = State.Closed;
-        }
+    /**
+     * Close a latency writer 
+     *  
+     * @param stats Indicates that latency writing is finished and aggregate 
+     * stats should be populated in the supplied stats object 
+     */
+    final public void close(final int warmupCount, final Stats stats) throws Exception {
+        close(true, stats, warmupCount);
     }
 
     /**

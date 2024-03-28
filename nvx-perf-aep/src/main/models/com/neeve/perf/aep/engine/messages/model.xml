@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<!--
+
+    Copyright 2016 Neeve Research, LLC
+
+    This product includes software developed at Neeve Research, LLC
+    (http://www.neeveresearch.com/) as well as software licenced to
+    Neeve Research, LLC under one or more contributor license agreements.
+    See the NOTICE file distributed with this work for additional information
+    regarding copyright ownership.
+
+    Neeve Research licenses this file to you under the Apache License,
+    Version 2.0 (the "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at:
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<model xmlns="http://www.neeveresearch.com/schema/x-adml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" namespace="com.neeve.perf.aep.engine.messages" defaultFactoryId="3">
+    <factories>
+        <factory name="MessageFactory" id="3"/>
+    </factories>
+
+    <messages>
+        <message name="FinalMessage" id="1">
+            <field name="throughput" type="Throughput" id="1"/>
+            <field name="latencies" type="Latencies" id="2"/>
+        </message>
+    </messages>
+
+    <entities>
+        <entity name="Throughput" id="100" asEmbedded="true">
+            <field name="postWarmup" type="Integer" id="2"/>
+        </entity>
+
+        <entity name="Latencies" id="101" asEmbedded="true">
+            <field name="w2w" type="LatencyType" id="1"/>
+        </entity>
+
+        <entity name="LatencyType" id="102" asEmbedded="true">
+            <field name="mean" type="Double" id="1"/>
+            <field name="pct50" type="Integer" id="2"/>
+            <field name="pct99" type="Integer" id="3"/>
+        </entity>
+    </entities>
+</model>
+
+

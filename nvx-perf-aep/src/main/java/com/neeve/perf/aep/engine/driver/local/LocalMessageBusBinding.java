@@ -25,8 +25,13 @@ import java.text.DecimalFormat;
 
 import com.neeve.event.IEventHandler;
 import com.neeve.perf.aep.engine.LatencyRecorder;
+import com.neeve.perf.aep.engine.messages.FinalMessage;
+import com.neeve.perf.aep.engine.messages.Latencies;
+import com.neeve.perf.aep.engine.messages.LatencyType;
+import com.neeve.perf.aep.engine.messages.MessageFactory;
+import com.neeve.perf.aep.engine.messages.Throughput;
+import com.neeve.perf.common.LatencyWriter;
 import com.neeve.perf.serialization.Driver;
-import com.neeve.perf.serialization.MessageFactory;
 import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.Car;
 import com.neeve.quark.QuarkBuffer;
@@ -57,6 +62,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     final private int _sender = hashCode();
     final private DecimalFormat _dfmt;
     final private MessageAcknowledger _acknowledger;
+    final private LatencyWriter.Stats _stats;
     private Provider<?> _provider;
     private QuarkBuffer _serializedMessage;
     private int _serializedMessageLength;
@@ -71,6 +77,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     private boolean _warmupCompleted;
     private int _postWarmupCount;
     private long _postWarmupStart;
+    private int _postWarmupRate;
     private int _numReceived;
 
     LocalMessageBusBinding(final String userName,
@@ -79,10 +86,65 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
         super(null, userName, descriptor, eventHandler);
         _dfmt = new DecimalFormat("#,###");
         _acknowledger = new MessageAcknowledger();
+        _stats = new LatencyWriter.Stats();
     }
 
-    final private void prepareSerializedMessage(final QuarkPacket packet) {
+    final private QuarkPacket prepareSerializedDataMessage(final QuarkPacket packet) {
         packet.init(_serializedMessage, 0, _serializedMessageLength);
+        return packet;
+    }
+
+    final private void receiveData(final QuarkPacket packet, final MessageChannel channel, final boolean isChannelGuaranteed) {
+        final long now = System.nanoTime();
+        LocalMessageBusBinding.this.onMessage(channel,
+                                              LocalMessageBusBinding.this.wrap(packet,
+                                                                               _provider.vfid(),
+                                                                               _provider.otype(),
+                                                                               _provider.encoding(),
+                                                                               _sender,
+                                                                               0,
+                                                                               0l,
+                                                                               null,
+                                                                               0l,
+                                                                               0l,
+                                                                               now,
+                                                                               now),
+                                              isChannelGuaranteed ? _acknowledger : null);
+    }
+
+    final private QuarkPacket prepareSerializedFinalMessage(final QuarkPacket packet) {
+        final FinalMessage message = FinalMessage.create();
+        final Throughput throughput = Throughput.create();
+        throughput.setPostWarmup(_postWarmupRate);
+        message.setThroughput(throughput);
+        final Latencies latencies = Latencies.create();
+        final LatencyType w2w = LatencyType.create();
+        w2w.setMean(_stats.avgo);
+        w2w.setPct50(_stats.pct50);
+        w2w.setPct99(_stats.pct99);
+        latencies.setW2w(w2w);
+        message.setLatencies(latencies);
+        _serializedMessageLength = message.serializeTo(_serializedMessage, 0);
+        packet.init(_serializedMessage, 0, _serializedMessageLength);
+        return packet;
+    }
+
+    final private void receiveFinal(final QuarkPacket packet, final MessageChannel channel, final boolean isChannelGuaranteed) {
+        final long now = System.nanoTime();
+        LocalMessageBusBinding.this.onMessage(channel,
+                                              LocalMessageBusBinding.this.wrap(packet,
+                                                                               MessageFactory.VFID,
+                                                                               MessageFactory.ID_FinalMessage,
+                                                                               MessageView.ENCODING_TYPE_PROTOBUF,
+                                                                               _sender,
+                                                                               0,
+                                                                               0l,
+                                                                               null,
+                                                                               0l,
+                                                                               0l,
+                                                                               now,
+                                                                               now),
+                                              isChannelGuaranteed ? _acknowledger : null);
     }
 
     final void send(final LocalMessageChannel source, final MessageView view) throws SmaException {
@@ -101,9 +163,9 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             // check and process if run is done
             if (++_numReceived == _count) {
                 final long stop = System.nanoTime();
-                LatencyRecorder.stop();
-                final int overallRate = (int)((_postWarmupCount * 1000000000L) / (stop - _postWarmupStart));
-                System.out.println("Processed " + _dfmt.format(_postWarmupCount) + " messages @ " + _dfmt.format(overallRate) + " msgs/sec post warmup.");
+                LatencyRecorder.stop(_count - _postWarmupCount, _stats);
+                _postWarmupRate = (int)((_postWarmupCount * 1000000000L) / (stop - _postWarmupStart));
+                System.out.println("Processed " + _dfmt.format(_postWarmupCount) + " messages @ " + _dfmt.format(_postWarmupRate) + " msgs/sec post warmup.");
                 System.out.println("Run complete (run rumi-reporter on latencies.*.bin to calculate latency stats)");
             }
 
@@ -204,11 +266,13 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
                 System.in.read();
             }
 
-            // get the channel to dispatch inbound messages on
-            final LocalMessageChannel channel = (LocalMessageChannel)getMessageChannel("client");
+            // get the client channel - channel to dispatch inbound messages on
+            final LocalMessageChannel clientChannel = (LocalMessageChannel)getMessageChannel("client");
+            final boolean isClientChannelGuaranteed = clientChannel.getQos() == MessageChannel.Qos.Guaranteed;
 
-            // is channel guaranteed?
-            final boolean isChannelGuaranteed = channel.getQos() == MessageChannel.Qos.Guaranteed;
+            // get the control channel
+            final LocalMessageChannel controlChannel = (LocalMessageChannel)getMessageChannel("control");
+            final boolean isControlChannelGuaranteed = controlChannel.getQos() == MessageChannel.Qos.Guaranteed;
 
             // run
             int i = 0;
@@ -220,23 +284,8 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             while (i < _count) {
                 final long current = System.nanoTime();
                 if (current >= next) {
-                    prepareSerializedMessage(packet);
-                    final long now = System.nanoTime();
-                    LocalMessageBusBinding.this.onMessage(channel,
-                                                          LocalMessageBusBinding.this.wrap(packet,
-                                                                                           _provider.vfid(),
-                                                                                           _provider.otype(),
-                                                                                           _provider.encoding(),
-                                                                                           _sender,
-                                                                                           0,
-                                                                                           0l,
-                                                                                           null,
-                                                                                           0l,
-                                                                                           0l,
-                                                                                           now,
-                                                                                           now),
-                                                          isChannelGuaranteed ? _acknowledger : null);
-
+                    // dispatch
+                    receiveData(prepareSerializedDataMessage(packet), clientChannel, isClientChannelGuaranteed);
 
                     // update counters
                     next += nanosPerMsg;
@@ -245,16 +294,19 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
                         _postWarmupCount++;
                     }
                     if (!_warmupCompleted && current - _start > (_warmupTime * 1000000000L)) {
-                        System.out.println("Warmup complete. Waiting for queues to empty.");
-                        while (i > _numReceived) {
-                            System.out.println("...[sent=" + i + ", rcvd=" + _numReceived + "].");
-                            Thread.sleep(100);
-                        }
+                        // warmup complete. wait for queues to empty...
+                        while (i > _numReceived);
                         _postWarmupStart = System.nanoTime();
                         _warmupCompleted = true;
                     }
                 }
             }
+
+            // wait for completion
+            while (_count > _numReceived);
+
+            // dispatch final message
+            receiveFinal(prepareSerializedFinalMessage(packet), controlChannel, isControlChannelGuaranteed);
         }
         catch (Throwable e) {
             e.printStackTrace();

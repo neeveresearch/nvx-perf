@@ -23,6 +23,7 @@ package com.neeve.perf.aep.engine;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -36,6 +37,10 @@ import com.neeve.aep.annotations.EventHandler;
 import com.neeve.aep.event.AepEngineStoppedEvent;
 import com.neeve.config.Config;
 import com.neeve.config.VMConfigurer;
+import com.neeve.perf.aep.engine.messages.FinalMessage;
+import com.neeve.perf.aep.engine.messages.Latencies;
+import com.neeve.perf.aep.engine.messages.LatencyType;
+import com.neeve.perf.aep.engine.messages.Throughput;
 import com.neeve.perf.serialization.Driver;
 import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.Car;
@@ -54,15 +59,16 @@ final public class ESProcessor {
     final private Provider<Car> _provider;
     final private int _count;
     final private boolean _emptyMessage;
+    final private DecimalFormat _dfmt;
     private AepEngine _engine;
     private AepMessageSender _messageSender;
-    private int _numReceived;
     private static boolean _engineStopped;
 
     private ESProcessor() {
         _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
         _count = Integer.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT));
         _emptyMessage = Boolean.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_EMPTY_MESSAGE));
+        _dfmt = new DecimalFormat("#,###");
     }
 
 	@AppInjectionPoint
@@ -86,11 +92,18 @@ final public class ESProcessor {
         // send outbound
         outMessage.setPostWireTs(inMessage.getPostWireTs());
         _messageSender.sendMessage(1, outMessage);
+    }
 
-        // if all received, initiate shutdown
-        if (++_numReceived == _count) {
-            _engine.setAsLastTransaction(null, true, true);
-        }
+    @EventHandler
+    final public void onMessage(final FinalMessage finalMessage) throws Exception {
+        // extract fields
+        final int throughput = finalMessage.getThroughput().getPostWarmup();
+        final double w2wMean = finalMessage.getLatencies().getW2w().getMean();
+        final int w2wMedian = finalMessage.getLatencies().getW2w().getPct50();
+        final int w2w99th = finalMessage.getLatencies().getW2w().getPct99();
+
+        // shut down the cluster
+        _engine.setAsLastTransaction(null, true, true);
     }
 
     @EventHandler
