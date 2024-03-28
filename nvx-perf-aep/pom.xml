@@ -42,6 +42,18 @@
                 <version>${nvx.talon.version}</version>
                 <executions>
                     <execution>
+                        <id>Messages</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>adm-generate</goal>
+                        </goals>
+                        <configuration>
+                            <modelFile>${project.basedir}/src/main/models/com/neeve/perf/aep/engine/messages/model.xml</modelFile>
+                            <encodingType>Xbuf2</encodingType>
+                        </configuration>
+                    </execution>
+
+                    <execution>
                         <id>State</id>
                         <phase>generate-sources</phase>
                         <goals>
@@ -102,6 +114,62 @@
                                     <attach>true</attach>
                                     <tarLongFileMode>gnu</tarLongFileMode>
                                     <descriptor>distribution-linux-x86-64.xml</descriptor>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>osx-x86-64</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>2.4</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>dist-osx-x86-64</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <inherited>false</inherited>
+                                <configuration>
+                                    <attach>true</attach>
+                                    <tarLongFileMode>gnu</tarLongFileMode>
+                                    <descriptor>distribution-osx-x86-64.xml</descriptor>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>win-x86-64</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>2.4</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>dist-win-x86-64</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <inherited>false</inherited>
+                                <configuration>
+                                    <attach>true</attach>
+                                    <tarLongFileMode>gnu</tarLongFileMode>
+                                    <descriptor>distribution-win-x86-64.xml</descriptor>
                                 </configuration>
                             </execution>
                         </executions>
