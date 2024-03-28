@@ -23,7 +23,6 @@ package com.neeve.perf.aep.engine;
 
 import java.io.File;
 import java.nio.file.Paths;
-import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -63,7 +62,6 @@ final public class SRProcessor {
     final private Provider<Car> _provider;
     final private int _count;
     final private boolean _emptyMessage;
-    final private DecimalFormat _dfmt;
     private AepEngine _engine;
     private AepMessageSender _messageSender;
     private static boolean _engineStopped;
@@ -72,7 +70,6 @@ final public class SRProcessor {
         _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
         _count = Integer.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT));
         _emptyMessage = Boolean.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_EMPTY_MESSAGE));
-        _dfmt = new DecimalFormat("#,###");
     }
 
 	@AppInjectionPoint
