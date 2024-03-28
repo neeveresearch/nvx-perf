@@ -38,10 +38,6 @@ import com.neeve.aep.event.AepEngineStoppedEvent;
 import com.neeve.config.Config;
 import com.neeve.config.VMConfigurer;
 import com.neeve.perf.aep.engine.state.Repository;
-import com.neeve.perf.aep.engine.messages.FinalMessage;
-import com.neeve.perf.aep.engine.messages.Latencies;
-import com.neeve.perf.aep.engine.messages.LatencyType;
-import com.neeve.perf.aep.engine.messages.Throughput;
 import com.neeve.perf.serialization.Driver;
 import com.neeve.perf.serialization.Provider;
 import com.neeve.perf.serialization.rumi.xbuf2.Car;
@@ -57,30 +53,18 @@ import com.neeve.util.UtlTailoring;
 import com.neeve.util.UtlTime;
 
 @AppHAPolicy(value = AepEngine.HAPolicy.StateReplication)
-final public class SRProcessor {
+final public class SRProcessor extends Processor {
     final private static Object mainThreadShutdownSynchronizer = new Object();
     final private Provider<Car> _provider;
     final private int _count;
     final private boolean _emptyMessage;
-    private AepEngine _engine;
-    private AepMessageSender _messageSender;
     private static boolean _engineStopped;
 
-    private SRProcessor() {
+    private SRProcessor() throws Exception {
         _provider = (Provider<Car>)Driver.getProvider(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_ENCODING));
         _count = Integer.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_COUNT));
         _emptyMessage = Boolean.valueOf(System.getProperty(ConfigProperties.PROP_DRIVER_TEST_EMPTY_MESSAGE));
     }
-
-	@AppInjectionPoint
-	final public void setEngine(AepEngine engine) {
-		_engine = engine;
-	}
-
-	@AppInjectionPoint
-	final public void setMessageSender(AepMessageSender messageSender) {
-		_messageSender = messageSender;
-	}
 
 	@AppStateFactoryAccessor
     final public IAepApplicationStateFactory getStateFactory() {
@@ -103,18 +87,6 @@ final public class SRProcessor {
         // send outbound
         outMessage.setPostWireTs(inMessage.getPostWireTs());
         _messageSender.sendMessage(1, outMessage);
-    }
-
-    @EventHandler
-    final public void onMessage(final FinalMessage finalMessage, final Repository repository) throws Exception {
-        // extract fields
-        final int throughput = finalMessage.getThroughput().getPostWarmup();
-        final double w2wMean = finalMessage.getLatencies().getW2w().getMean();
-        final int w2wMedian = finalMessage.getLatencies().getW2w().getPct50();
-        final int w2w99th = finalMessage.getLatencies().getW2w().getPct99();
-
-        // shut down the cluster
-        _engine.setAsLastTransaction(null, true, true);
     }
 
     @EventHandler
@@ -143,6 +115,13 @@ final public class SRProcessor {
         System.err.println("   Indicates that latencies should not be written to a file (default=false)");
         System.err.println(" [{-b, --printIntervalStats} print interval latency stats");
         System.err.println("   Indicates that latencies stats should be printed on a periodic basis in addition to at the end (default=false)");
+        System.err.println("--------------------------------------------------------------------------------------------------------------------");
+        System.err.println(" [{-O, --outputFile} the file to write the result to");
+        System.err.println("   The excel file to write the results to (default=null)");
+        System.err.println(" [{-C, --outputCell} the cell in the output file to write the result to");
+        System.err.println("   Specifies the cell, in <ROW>-<COL> format, in the result excel file where the result should be written (default=null)");
+        System.err.println(" [{-T, --outputThroughput} write throughput result instead of latencies");
+        System.err.println("   Specifies that the throughput result of the test should be written instead of latencies (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-j, --injectorCPUAffinityMask} CPU affinity mask of the injecting thread");
         System.err.println("   Sets the CPU affinity mask of the injecting thread (default=null)");
@@ -242,6 +221,11 @@ final public class SRProcessor {
         final CmdLineParser.Option printIntervalStatsOption = parser.addBooleanOption('b', "printIntervalStats");
         final CmdLineParser.Option injectorCPUAffinityMaskOption = parser.addStringOption('j', "injectorCPUAffinityMask");
 
+        // output options
+        final CmdLineParser.Option outputFileOption = parser.addStringOption('O', "outputFile");
+        final CmdLineParser.Option outputCellOption = parser.addStringOption('C', "outputCell");
+        final CmdLineParser.Option outputThroughputOption = parser.addBooleanOption('T', "outputThroughput");
+
         // containerization options
         final CmdLineParser.Option serverOption = parser.addBooleanOption('s', "server");
 
@@ -299,6 +283,17 @@ final public class SRProcessor {
                 if (injectorCPUAffinityMask != null) {
                     System.setProperty(ConfigProperties.PROP_DRIVER_INJECTOR_CPU_AFFINITY_MASK, injectorCPUAffinityMask);
                 }
+
+                // ...output
+                String val = (String)parser.getOptionValue(outputFileOption, null);
+                if (val != null) {
+                    System.setProperty(ConfigProperties.PROP_OUTPUT_FILE, val);
+                }
+                val = (String)parser.getOptionValue(outputCellOption, null);
+                if (val != null) {
+                    System.setProperty(ConfigProperties.PROP_OUTPUT_CELL, val);
+                }
+                System.setProperty(ConfigProperties.PROP_OUTPUT_THROUGHPUT, (Boolean)parser.getOptionValue(outputThroughputOption, false) ? "true" : "false");
 
                 // ...multiplexer
                 System.setProperty(ConfigProperties.PROP_MUX_QUEUE_DEPTH, String.valueOf((Integer)parser.getOptionValue(muxQueueDepthOption, 1024)));
@@ -380,6 +375,11 @@ final public class SRProcessor {
                 System.out.println("......noLatencyWrites=" + System.getProperty(ConfigProperties.PROP_DRIVER_LW_NOWRITE));
                 System.out.println("......printIntervalStats=" + System.getProperty(ConfigProperties.PROP_DRIVER_LW_PRINT_INTERVAL_STATS));
                 System.out.println("......injectorCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_DRIVER_INJECTOR_CPU_AFFINITY_MASK));
+                System.out.println("...}");
+                System.out.println("...Output {");
+                System.out.println("......file=" + System.getProperty(ConfigProperties.PROP_OUTPUT_FILE));
+                System.out.println("......cell=" + System.getProperty(ConfigProperties.PROP_OUTPUT_CELL));
+                System.out.println("......throughput=" + System.getProperty(ConfigProperties.PROP_OUTPUT_THROUGHPUT));
                 System.out.println("...}");
                 System.out.println("...Containerization {");
                 final boolean launchInServer = (Boolean)parser.getOptionValue(serverOption, false);

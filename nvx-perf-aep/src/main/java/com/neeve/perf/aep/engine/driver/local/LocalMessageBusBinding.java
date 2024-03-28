@@ -79,6 +79,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
     private long _postWarmupStart;
     private int _postWarmupRate;
     private int _numReceived;
+    private volatile boolean _done;
 
     LocalMessageBusBinding(final String userName,
                            final MessageBusDescriptor descriptor,
@@ -172,6 +173,11 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             // dispatch stability
             if (source.getQos() == MessageChannel.Qos.Guaranteed) {
                 source.onStable(view);
+            }
+
+            // done?
+            if (_numReceived == _count) {
+                _done = true;
             }
         }
         catch (Throwable e) {
@@ -303,7 +309,7 @@ final public class LocalMessageBusBinding extends MessageBusBindingBase implemen
             }
 
             // wait for completion
-            while (_count > _numReceived);
+            while (!_done);
 
             // dispatch final message
             receiveFinal(prepareSerializedFinalMessage(packet), controlChannel, isControlChannelGuaranteed);

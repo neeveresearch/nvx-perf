@@ -33,6 +33,11 @@ final class ConfigProperties {
     final static String PROP_DRIVER_LW_PRINT_INTERVAL_STATS = "DRIVER_LW_PRINT_INTERVAL_STATS";
     final static String PROP_DRIVER_PROMPT_TO_START = "DRIVER_PROMPT_TO_START";
 
+    // Output
+    final static String PROP_OUTPUT_FILE = "OUTPUT_FILE";
+    final static String PROP_OUTPUT_CELL = "OUTPUT_CELL";
+    final static String PROP_OUTPUT_THROUGHPUT = "OUTPUT_THROUGHPUT";
+
     // Multiplexer
     final static String PROP_MUX_QUEUE_DEPTH = "MUX_QUEUE_DEPTH";
     final static String PROP_MUX_CPU_AFFINITY_MASK = "MUX_CPU_AFFINITY_MASK";
