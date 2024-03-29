@@ -104,4 +104,4 @@ Execute a performance benchmark as follows:
 `{JAVA_HOME_OF_CHOICE}/bin/java -cp "libs/*" {Performance Program} {Program Parameters}`
 
 ## Next Steps
-Detailed information about each of the perf modules, the test programs contained in each module and various parameters to those tests can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf.wiki.git). 
+Detailed information about each of the perf modules, the test programs contained in each module and various parameters to those tests can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki). 
