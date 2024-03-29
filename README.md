@@ -40,7 +40,7 @@ Note: Only the Linux distributions contain the X Platform native libraries some 
 ```
 
 ## Distribution Repository
-Built distributions for published Perf releases (corresponding to X Platform releases) can be downloaded from the Neeve artifact repository as follows:
+Distributions can be downloaded from the Neeve artifact repository as follows:
 
 `wget http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-{module}/{version}/nvx-perf-{module}-{version}-dist-{arch}.tar.gz`
 
@@ -48,7 +48,7 @@ For example, execute the following to download the distribution for the `persist
 
 `wget http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-persistence/3.16.29/nvx-perf-persistence-3.16.29-dist-linux-x86-64.tar.gz`
 
-## Build Distributions
+## Build
 This section describes how to build the module distributions from source. Please skip this section in case you are only interested in running tests using downloaded distributions.
 
 ### Set Up Your Environment
