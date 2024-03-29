@@ -1,6 +1,6 @@
 # The Perf Repository
 
-This repository contains programs to run performance benchmarks on the various modules that comprise the X Platform runtime. In addition, these programs also serve as sample programs illustrating how to program to these modules. 
+This repository contains programs to run performance benchmarks on the various modules that comprise the X Platform runtime. In addition, the programs in this repo also serve as sample programs illustrating how to program to these X modules. 
 
 ## Repository Organization
 This repository is organized as a multi-module Maven project. Each Maven module contains programs pertaining to a specific X runtime module. For example, the `nvx-perf-serialization` module contains programs that benchmark message serialization and deserialization, `nvx-perf-persistence` contains programs that benchmark the various message and data persisters and so on and so forth. Each Maven module generates an independently deployable distribution as part of the build process. To run tests pertaining to a particular module, you can either download the published distribution for the module from the Neeve artifact repository or build and deploy the module's distribution and run the desired tests. 
