@@ -1,4 +1,4 @@
-# The Perf Repository
+# The X Platform Perf Repository
 
 This repository contains programs to run performance benchmarks on the various modules that comprise the X Platform runtime. In addition, the programs in this repo also serve as sample programs illustrating how to program to these X modules. 
 
