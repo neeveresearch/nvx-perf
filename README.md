@@ -21,7 +21,7 @@ The following are the various modules that produce deployable distributions
 More detailed information about each of these modules can be found on the Perf wiki.
 
 ## Versioning
-A Perf release is published for each released version of the X Platform starting with 3.16.14 using the same version as the platform release. Built module distributions for each Perf release are built and published to the Neeve artifact repository from where they can be downloaded. The following is the 
+A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release. 
 
 ## Distribution Naming
 A module distribution is named as follows
@@ -39,7 +39,7 @@ For example, the distribution for the `persistence` module for `linux-x86-64` ar
 Note: Only the Linux distributions contain the X Platform native libraries some of which are needed for zero garbage operation of the platform. Therefore, although the Windows and OSX distributions can be run, as of now it is only the Linux distributions that are fully optimized for performance
 ```
 
-## Download Distributions
+## Distribution Repository
 Built distributions for published Perf releases (corresponding to X Platform releases) can be downloaded from the Neeve artifact repository as follows:
 
 `wget http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-{module}/{version}/nvx-perf-{module}-{version}-dist-{arch}.tar.gz`
