@@ -59,6 +59,7 @@
                         <queueDepth>${CLUSTERING_DETACHED_DISPATCH_QUEUE_DEPTH::1024}</queueDepth>
                         <queueDrainerCpuAffinityMask>${CLUSTERING_DETACHED_DISPATCH_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>
                     </detachedDispatch>
+                    <linkReaderCpuAffinityMask>${CLUSTERING_LINK_READER_CPU_AFFINITY_MASK::0}</linkReaderCpuAffinityMask>
                 </clustering>
 
                 <persistenceQuorum>${PERSISTENCE_QUORUM::1}</persistenceQuorum>

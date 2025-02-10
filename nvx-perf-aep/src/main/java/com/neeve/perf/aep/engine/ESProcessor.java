@@ -166,10 +166,15 @@ final public class ESProcessor extends Processor {
         System.err.println(" [{-v, --enableClustering} whether to disable store clustering]");
         System.err.println("   Specifies whether clustering is disabled (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
+        System.err.println(" [{-U, --clusteringDiscoveryLocalIfAddr} specifies the local interface to use for cluster discovery]");
+        System.err.println("   Specifies the local interface to use for cluster discovery (default=0.0.0.0)");
+        System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-I, --clusteringLocalIfAddr} specifies the local interface to use for cluster replication]");
         System.err.println("   Specifies the local interface to use for cluster replication (default=0.0.0.0)");
         System.err.println(" [{-P, --clusteringLocalPort} specifies the local port to use for cluster replication]");
         System.err.println("   Specifies the local port to use for cluster replication (default=0)");
+        System.err.println(" [{-V, --clusteringLinkReaderCPUAffinityMask} cluster replication link reader thread CPU affinity mask]");
+        System.err.println("   Specifies the cluster replication link reader thread CPU affinity mask. (default=null)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-S, --clusteringDetachedSend} run store replicator in detached send mode]");
         System.err.println("   Switches on detached send for cluster replication (concurrent send in a separate thread) on or off (default=false)");
@@ -240,8 +245,10 @@ final public class ESProcessor extends Processor {
 
         // store clustering related options
         final CmdLineParser.Option enableClusteringOption = parser.addBooleanOption('v', "enableClustering");
+        final CmdLineParser.Option clusteringDiscoveryLocalIfAddrOption = parser.addStringOption('U', "clusteringDiscoveryLocalIfAddr");
         final CmdLineParser.Option clusteringLocalIfAddrOption = parser.addStringOption('I', "clusteringLocalIfAddr");
         final CmdLineParser.Option clusteringLocalPortOption = parser.addStringOption('P', "clusteringLocalPort");
+        final CmdLineParser.Option clusteringLinkReaderCPUAffinityMaskOption = parser.addStringOption('V', "clusteringLinkReaderCPUAffinityMask");
         final CmdLineParser.Option clusteringDetachedSendOption = parser.addBooleanOption('S', "clusteringDetachedSend");
         final CmdLineParser.Option clusteringDetachedSendQueueDepthOption = parser.addIntegerOption('Q', "clusteringDetachedSendQueueDepth");
         final CmdLineParser.Option clusteringDetachedSenderCPUAffinityMaskOption = parser.addStringOption('A', "clusteringDetachedSenderCPUAffinityMask");
@@ -323,8 +330,13 @@ final public class ESProcessor extends Processor {
                 // ... clustering
                 final boolean enableClustering = (Boolean)parser.getOptionValue(enableClusteringOption, false);
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_ENABLED, enableClustering ? "true" : "false");
+                System.setProperty(ConfigProperties.PROP_CLUSTERING_DISCOVERY_LOCAL_IF_ADDR, (String)parser.getOptionValue(clusteringDiscoveryLocalIfAddrOption, "0.0.0.0"));
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_IF_ADDR, (String)parser.getOptionValue(clusteringLocalIfAddrOption, "0.0.0.0"));
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_PORT, (String)parser.getOptionValue(clusteringLocalPortOption, "0"));
+                final String clusteringLinkReaderCPUAffinityMask = (String)parser.getOptionValue(clusteringLinkReaderCPUAffinityMaskOption, null);
+                if (clusteringLinkReaderCPUAffinityMask != null) {
+                    System.setProperty(ConfigProperties.PROP_CLUSTERING_LINK_READER_CPU_AFFINITY_MASK, clusteringLinkReaderCPUAffinityMask);
+                }
                 boolean clusteringDetachedSend = (Boolean)parser.getOptionValue(clusteringDetachedSendOption, false);
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND, clusteringDetachedSend ? "true" : "false");
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(clusteringDetachedSendQueueDepthOption, 1024)));
@@ -398,8 +410,11 @@ final public class ESProcessor extends Processor {
                 System.out.println("...Store Replicator {");
                 System.out.println("......enabled=" + enableClustering);
                 if (enableClustering) {
-                    System.out.println("......localIfAddr=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_IF_ADDR));
-                    System.out.println("......localPort=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_PORT));
+                    System.out.println("......discoveryLocalIfAddr=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DISCOVERY_LOCAL_IF_ADDR));
+                    System.out.println("......link");
+                    System.out.println(".........localIfAddr=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_IF_ADDR));
+                    System.out.println(".........localPort=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_PORT));
+                    System.out.println(".........readerCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LINK_READER_CPU_AFFINITY_MASK));
                     System.out.println("......detachedSend= " + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND));
                     System.out.println(".........queueDepth=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DEPTH));
                     System.out.println(".........senderCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK));
