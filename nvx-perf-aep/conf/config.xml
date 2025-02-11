@@ -51,6 +51,7 @@
                     <discoveryDescriptor>mcast://224.0.1.200:4091&amp;localIfAddr=${CLUSTER_DISCOVERY_LOCALIFADDR::0.0.0.0}</discoveryDescriptor>
                     <localIfAddr>${CLUSTER_REPLICATOR_LOCALIFADDR::0.0.0.0}</localIfAddr>
                     <localPort>${CLUSTER_REPLICATOR_LOCALPORT::0}</localPort>
+                    <linkParams>${CLUSTER_LINK_PARAMS::dummy=value}</linkParams>
                     <detachedSend enabled="${CLUSTERING_DETACHED_SEND::false}">
                         <queueDepth>${CLUSTERING_DETACHED_SEND_QUEUE_DEPTH::1024}</queueDepth>
                         <queueDrainerCpuAffinityMask>${CLUSTERING_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK::[0]}</queueDrainerCpuAffinityMask>

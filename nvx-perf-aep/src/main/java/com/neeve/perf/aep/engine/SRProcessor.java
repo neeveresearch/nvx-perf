@@ -189,6 +189,8 @@ final public class SRProcessor extends Processor {
         System.err.println("   Specifies the local port to use for cluster replication (default=0)");
         System.err.println(" [{-V, --clusteringLinkReaderCPUAffinityMask} cluster replication link reader thread CPU affinity mask]");
         System.err.println("   Specifies the cluster replication link reader thread CPU affinity mask. (default=null)");
+        System.err.println(" [{-W, --clusteringLinkSpinRead} whether the cluster replication link should perform spinning reads]");
+        System.err.println("   Specifies whether the network reads performed by the cluster replication link should spin instead of block. (default=false)");
         System.err.println("--------------------------------------------------------------------------------------------------------------------");
         System.err.println(" [{-S, --clusteringDetachedSend} run store replicator in detached send mode]");
         System.err.println("   Switches on detached send for cluster replication (concurrent send in a separate thread) on or off (default=false)");
@@ -263,6 +265,7 @@ final public class SRProcessor extends Processor {
         final CmdLineParser.Option clusteringLocalIfAddrOption = parser.addStringOption('I', "clusteringLocalIfAddr");
         final CmdLineParser.Option clusteringLocalPortOption = parser.addStringOption('P', "clusteringLocalPort");
         final CmdLineParser.Option clusteringLinkReaderCPUAffinityMaskOption = parser.addStringOption('V', "clusteringLinkReaderCPUAffinityMask");
+        final CmdLineParser.Option clusteringLinkSpinReadOption = parser.addStringOption('W', "clusteringLinkSpinRead");
         final CmdLineParser.Option clusteringDetachedSendOption = parser.addBooleanOption('S', "clusteringDetachedSend");
         final CmdLineParser.Option clusteringDetachedSendQueueDepthOption = parser.addIntegerOption('Q', "clusteringDetachedSendQueueDepth");
         final CmdLineParser.Option clusteringDetachedSenderCPUAffinityMaskOption = parser.addStringOption('A', "clusteringDetachedSenderCPUAffinityMask");
@@ -351,6 +354,10 @@ final public class SRProcessor extends Processor {
                 if (clusteringLinkReaderCPUAffinityMask != null) {
                     System.setProperty(ConfigProperties.PROP_CLUSTERING_LINK_READER_CPU_AFFINITY_MASK, clusteringLinkReaderCPUAffinityMask);
                 }
+                String clusteringLinkSpinRead;
+                if ((clusteringLinkSpinRead = (String)parser.getOptionValue(clusteringLinkSpinReadOption, null)) != null) {
+                    System.setProperty(ConfigProperties.PROP_CLUSTERING_LINK_PARAMS, "eagerread=" + (clusteringLinkSpinRead.equalsIgnoreCase("true") ? "true" : "false"));
+                }
                 boolean clusteringDetachedSend = (Boolean)parser.getOptionValue(clusteringDetachedSendOption, false);
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND, clusteringDetachedSend ? "true" : "false");
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(clusteringDetachedSendQueueDepthOption, 1024)));
@@ -429,6 +436,7 @@ final public class SRProcessor extends Processor {
                     System.out.println(".........localIfAddr=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_IF_ADDR));
                     System.out.println(".........localPort=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LOCAL_PORT));
                     System.out.println(".........readerCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LINK_READER_CPU_AFFINITY_MASK));
+                    System.out.println(".........linkParams=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_LINK_PARAMS));
                     System.out.println("......detachedSend= " + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND));
                     System.out.println(".........queueDepth=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DEPTH));
                     System.out.println(".........senderCPUAffinityMask=" + System.getProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_SEND_QUEUE_DRAINER_CPU_AFFINITY_MASK));
@@ -440,9 +448,21 @@ final public class SRProcessor extends Processor {
                 System.out.println("");
 
                 // enable affinitization
-                if (injectorCPUAffinityMask != null || muxCPUAffinityMask != null || (busDetachedSend != null && busDetachedSend.equalsIgnoreCase("true") && busDetachedSendCPUAffinityMask != null) || (enablePersistence && persisterDetached != null && persisterDetached.equalsIgnoreCase("true") && persisterWriterCPUAffinityMask != null) || (enableClustering && clusteringDetachedSend && clusteringDetachedSenderCPUAffinityMask != null) || (enableClustering &&  clusteringDetachedDispatch && clusteringDetachedDispatcherCPUAffinityMask != null)) {
+                if (injectorCPUAffinityMask != null || 
+                    muxCPUAffinityMask != null || 
+                    (busDetachedSend != null && busDetachedSend.equalsIgnoreCase("true") && busDetachedSendCPUAffinityMask != null) || 
+                    (enablePersistence && persisterDetached != null && persisterDetached.equalsIgnoreCase("true") && persisterWriterCPUAffinityMask != null) || 
+                    (enableClustering && clusteringLinkSpinRead != null && clusteringLinkSpinRead.equalsIgnoreCase("true") && clusteringLinkReaderCPUAffinityMask != null) ||
+                    (enableClustering && clusteringDetachedSend && clusteringDetachedSenderCPUAffinityMask != null) || 
+                    (enableClustering &&  clusteringDetachedDispatch && clusteringDetachedDispatcherCPUAffinityMask != null)) {
                     System.setProperty(UtlConstants.THREAD_ENABLECPUAFFINITYMASKS_PROPNAME, "true");
-                    if (injectorCPUAffinityMask == null || muxCPUAffinityMask == null || (busDetachedSend != null && busDetachedSend.equalsIgnoreCase("true") && busDetachedSendCPUAffinityMask == null) || (enablePersistence && persisterDetached != null && persisterDetached.equalsIgnoreCase("true") && persisterWriterCPUAffinityMask == null) || (enableClustering && clusteringDetachedSend && clusteringDetachedSenderCPUAffinityMask == null) || (enableClustering &&  clusteringDetachedDispatch && clusteringDetachedDispatcherCPUAffinityMask == null)) {
+                    if (injectorCPUAffinityMask == null || 
+                        muxCPUAffinityMask == null || 
+                        (busDetachedSend != null && busDetachedSend.equalsIgnoreCase("true") && busDetachedSendCPUAffinityMask == null) || 
+                        (enablePersistence && persisterDetached != null && persisterDetached.equalsIgnoreCase("true") && persisterWriterCPUAffinityMask == null) || 
+                        (enableClustering && clusteringLinkSpinRead != null && clusteringLinkSpinRead.equalsIgnoreCase("true") && clusteringLinkReaderCPUAffinityMask == null) ||
+                        (enableClustering && clusteringDetachedSend && clusteringDetachedSenderCPUAffinityMask == null) || 
+                        (enableClustering &&  clusteringDetachedDispatch && clusteringDetachedDispatcherCPUAffinityMask == null)) {
                         System.out.println("");
                         System.out.println("*****************************************************************************");
                         System.out.println("                               WARNING!!!                                    ");
