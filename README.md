@@ -43,13 +43,22 @@ For example, the distribution for the `persistence` module for `linux-x86-64` ar
 **Note**: Only Linux distributions include X Platform native libraries required for zero-garbage operation. Windows and OSX distributions can be run for development purposes, but Linux distributions are required for full performance optimization.
 
 ## Distribution Repository
-Distributions can be downloaded from the Neeve artifact repository as follows:
 
-`wget http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-{module}/{version}/nvx-perf-{module}-{version}-dist-{arch}.tar.gz`
+Distributions can be downloaded from the Neeve artifact repository. You will need valid credentials for access.
 
-For example, execute the following to download the distribution for the `persistence` module for `linux-x86-64` architecture produced by the `3.16.29` perf release
+**Download with credentials**:
 
-`wget http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-persistence/3.16.29/nvx-perf-persistence-3.16.29-dist-linux-x86-64.tar.gz`
+```bash
+wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
+  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-{module}/{version}/nvx-perf-{module}-{version}-dist-{arch}.tar.gz
+```
+
+**Example** - Download the `persistence` module for `linux-x86-64` architecture from the `3.16.29` perf release:
+
+```bash
+wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
+  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-persistence/3.16.29/nvx-perf-persistence-3.16.29-dist-linux-x86-64.tar.gz
+```
 
 ## Build
 This section describes how to build the module distributions from source. Please skip this section in case you are only interested in running tests using downloaded distributions.
@@ -64,6 +73,27 @@ This repository is built using JDK 8. You can download JDK 8 from [here](https:/
 
 #### Set JAVA_HOME
 After installing Java 8, set JAVA_HOME to the root directory of the JDK 8 installation. This will ensure that Maven picks up the installed JDK for the build.
+
+#### Configure Maven Credentials
+
+You need to configure credentials for the Neeve artifact repositories in your Maven settings file (`~/.m2/settings.xml`):
+
+```xml
+<settings>
+  <servers>
+    <server>
+      <id>neeve-public</id>
+      <username>YOUR_USERNAME</username>
+      <password>YOUR_PASSWORD</password>
+    </server>
+    <server>
+      <id>neeve-licensed</id>
+      <username>YOUR_USERNAME</username>
+      <password>YOUR_PASSWORD</password>
+    </server>
+  </servers>
+</settings>
+```
 
 #### X Platform License
 You do not need an X Platform license to build or run the module distributions. The distributions include an embedded license. 
