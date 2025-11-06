@@ -1,24 +1,29 @@
-# The X Platform Perf Repository
+# X Platform Performance Benchmark Suite
 
-This repository contains programs to run performance benchmarks on the various modules that comprise the X Platform runtime. In addition, the programs in this repo also serve as sample programs illustrating how to program to these X modules. 
+This repository contains performance benchmarks for all major components of the X Platform runtime. The programs serve both as performance measurement tools and as sample code demonstrating X Platform best practices.
+
+## Canonical Benchmark
+
+The **AEP Module** (`nvx-perf-aep`) contains the canonical end-to-end benchmark used to measure X Platform's official performance metrics published in the [X Platform Performance Documentation](https://docs.xplatform.com/x-platform/performance). This benchmark exercises the complete Receive-Process-Send flow of a clustered microservice. 
 
 ## Repository Organization
 This repository is organized as a multi-module Maven project. Each Maven module contains programs pertaining to a specific X runtime module. For example, the `nvx-perf-serialization` module contains programs that benchmark message serialization and deserialization, `nvx-perf-persistence` contains programs that benchmark the various message and data persisters and so on and so forth. Each Maven module generates an independently deployable distribution as part of the build process. To run tests pertaining to a particular module, you can either download the published distribution for the module from the Neeve artifact repository or build and deploy the module's distribution and run the desired tests. 
 
 ## Modules
-The following are the various modules that produce deployable distributions
 
-| X Platform Module    | Maven Module           |
-|:-------------------- |:-----------------------|
-| Time                 | nvx-perf-time          |
-| Encoding (ADM)       | nvx-perf-serialization |
-| Link                 | nvx-perf-link          |
-| Messaging (SMA)      | nvx-perf-messaging     |
-| Persistence          | nvx-perf-persistence   |
-| Store (ODS)          | nvx-perf-storage       |
-| Engine (AEP)         | nvx-perf-aep           |
+Each module benchmarks a specific X Platform component and produces an independently deployable distribution:
 
-More detailed information about each of these modules can be found on the Perf wiki.
+| X Platform Module    | Maven Module           | Description |
+|:-------------------- |:-----------------------|:------------|
+| Time                 | nvx-perf-time          | Time API overhead benchmarks |
+| Encoding (ADM)       | nvx-perf-serialization | Message serialization/deserialization |
+| Link                 | nvx-perf-link          | Low-level transport throughput and latency |
+| Messaging (SMA)      | nvx-perf-messaging     | Pub/sub messaging layer performance |
+| Persistence          | nvx-perf-persistence   | Message and data persistence |
+| Store (ODS)          | nvx-perf-storage       | Object store operations |
+| Engine (AEP)         | nvx-perf-aep           | **End-to-end canonical benchmark** |
+
+Detailed documentation for each module can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki).
 
 ## Versioning
 A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release. 
@@ -33,11 +38,9 @@ Valid values for `arch` are as follows:
 - osx-x86-64
 - win-x86-64
 
-For example, the distribution for the `persistence` module for `linux-x86-64` architecture produced by the `3.16.29` perf relesed is named `nvx-perf-aep-3.16.29-dist-linux-x86-64.tar.gz`
+For example, the distribution for the `persistence` module for `linux-x86-64` architecture produced by the `3.16.29` perf release is named `nvx-perf-persistence-3.16.29-dist-linux-x86-64.tar.gz`
 
-```
-Note: Only the Linux distributions contain the X Platform native libraries some of which are needed for zero garbage operation of the platform. Therefore, although the Windows and OSX distributions can be run, as of now it is only the Linux distributions that are fully optimized for performance
-```
+**Note**: Only Linux distributions include X Platform native libraries required for zero-garbage operation. Windows and OSX distributions can be run for development purposes, but Linux distributions are required for full performance optimization.
 
 ## Distribution Repository
 Distributions can be downloaded from the Neeve artifact repository as follows:
@@ -54,7 +57,7 @@ This section describes how to build the module distributions from source. Please
 ### Set Up Your Environment
 
 #### Install Maven
-This repository is built using Maven. Published distributions of the modules in this repository are built using Maven 3.5.4. To build, you You can download the binaries for this Maven version from [here](https://archive.apache.org/dist/maven/maven-3/3.5.4/binaries/). Feel free to use later versions of Maven if you need to. If you are new to Maven, you can find instructions [here](https://maven.apache.org/index.html) on how to install and configure Maven.
+This repository is built using Maven. Published distributions use Maven 3.5.4. You can download the binaries for this Maven version from [here](https://archive.apache.org/dist/maven/maven-3/3.5.4/binaries/). Later versions of Maven should also work. If you are new to Maven, you can find installation instructions [here](https://maven.apache.org/index.html).
 
 #### Install Java
 This repository is built using JDK 8. You can download JDK 8 from [here](https://www.oracle.com/in/java/technologies/javase/javase8u211-later-archive-downloads.html). 
@@ -63,45 +66,70 @@ This repository is built using JDK 8. You can download JDK 8 from [here](https:/
 After installing Java 8, set JAVA_HOME to the root directory of the JDK 8 installation. This will ensure that Maven picks up the installed JDK for the build.
 
 #### X Platform License
-You do NOT need an X Platform license to build or run the module distributions. The built distributions come with an embedded version of the license. 
+You do not need an X Platform license to build or run the module distributions. The distributions include an embedded license. 
 
 ### Build
 
 #### Clone The Repository
-- Ensure the `git` - the command line Git client - is installed on your machine
-- Open a terminal window
-- Execute `git clone https://github.com/neeveresearch/nvx-perf.git` to clone the repository
 
-There are several other techniques to clone the repository. Feel free to use any technique that works for you.
+```bash
+git clone https://github.com/neeveresearch/nvx-perf.git
+cd nvx-perf
+```
 
 #### Build The Repository Modules
-- Go to the base directory of the cloned repository
-- Execute `mvn install`
 
-The above will build all the modules but will _not_ build the module's deployable distributions. 
-
-#### Build The Repository Module Distributions
-- Go to the base directory of the cloned repository
-- Execute `mvn -P <arch> clean install`
-
-## Run
-The following are the general steps of how one would run tests contained in a module's distribution
-
-#### Copy
-Copy the module distribution to the target machine(s) where the tests will be executed
-
-#### Unarchive
-Execute `tar xvf <distribution>` to unarchive the distribution. This will result in the following folder structure
-```
-|
-|---conf
-|---libs
+```bash
+mvn clean install
 ```
 
-#### Run Test
-Execute a performance benchmark as follows:
+This builds all modules but does not create deployable distributions.
 
-`{JAVA_HOME_OF_CHOICE}/bin/java -cp "libs/*" {Performance Program} {Program Parameters}`
+#### Build Module Distributions
+
+To build deployable distributions, specify a platform profile:
+
+```bash
+# For Linux (recommended for performance testing)
+mvn -P linux-x86-64 clean install
+
+# For macOS (development only)
+mvn -P osx-x86-64 clean install
+
+# For Windows (development only)
+mvn -P win-x86-64 clean install
+```
+
+Distributions are created in each module's `target/` directory.
+
+## Running Benchmarks
+
+### Extract Distribution
+
+```bash
+tar xvf nvx-perf-{module}-{version}-dist-{arch}.tar.gz
+cd nvx-perf-{module}-{version}
+```
+
+This creates the following structure:
+```
+nvx-perf-{module}-{version}/
+├── conf/      # Configuration files
+└── libs/      # All dependencies
+```
+
+### Run a Benchmark
+
+```bash
+$JAVA_HOME/bin/java -cp "libs/*" {BenchmarkClass} {parameters}
+```
+
+**Example** - Run serialization benchmark:
+```bash
+$JAVA_HOME/bin/java -cp "libs/*" com.neeve.perf.serialization.Driver --provider xbuf2.random
+```
+
+See the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki) for specific benchmark classes and parameters for each module.
 
 ## Next Steps
 Detailed information about each of the perf modules, the test programs contained in each module and various parameters to those tests can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki). 
