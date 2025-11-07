@@ -17,7 +17,7 @@ Each module benchmarks a specific X Platform component and produces an independe
 |:-------------------- |:-----------------------|:------------|
 | Time                 | nvx-perf-time          | Time API overhead benchmarks |
 | Encoding (ADM)       | nvx-perf-serialization | Message serialization/deserialization |
-| Link                 | nvx-perf-link          | Low-level transport throughput and latency |
+| Link                 | nvx-perf-link          | Cluster replication link throughput and latency |
 | Messaging (SMA)      | nvx-perf-messaging     | Pub/sub messaging layer performance |
 | Persistence          | nvx-perf-persistence   | Message and data persistence |
 | Store (ODS)          | nvx-perf-storage       | Object store operations |
