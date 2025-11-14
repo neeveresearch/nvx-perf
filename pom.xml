@@ -44,6 +44,7 @@
         <module>nvx-perf-persistence</module>
         <module>nvx-perf-storage</module>
         <module>nvx-perf-aep</module>
+        <module>nvx-perf-dist</module>
     </modules>
 
     <dependencies>

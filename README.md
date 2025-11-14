@@ -7,11 +7,11 @@ This repository contains performance benchmarks for all major components of the 
 The **AEP Module** (`nvx-perf-aep`) contains the canonical end-to-end benchmark used to measure X Platform's official performance metrics published in the [X Platform Performance Documentation](https://docs.xplatform.com/performance). This benchmark exercises the complete Receive-Process-Send flow of a clustered microservice. 
 
 ## Repository Organization
-This repository is organized as a multi-module Maven project. Each Maven module contains programs pertaining to a specific X runtime module. For example, the `nvx-perf-serialization` module contains programs that benchmark message serialization and deserialization, `nvx-perf-persistence` contains programs that benchmark the various message and data persisters and so on and so forth. Each Maven module generates an independently deployable distribution as part of the build process. To run tests pertaining to a particular module, you can either download the published distribution for the module from the Neeve artifact repository or build and deploy the module's distribution and run the desired tests. 
+This repository is organized as a multi-module Maven project. Each Maven module contains programs pertaining to a specific X runtime module. For example, the `nvx-perf-serialization` module contains programs that benchmark message serialization and deserialization, `nvx-perf-persistence` contains programs that benchmark the various message and data persisters and so on and so forth. The build process creates a single distribution containing all benchmark modules and their dependencies. 
 
 ## Modules
 
-Each module benchmarks a specific X Platform component and produces an independently deployable distribution:
+Each module benchmarks a specific X Platform component:
 
 | X Platform Module    | Maven Module           | Description |
 |:-------------------- |:-----------------------|:------------|
@@ -29,16 +29,16 @@ Detailed documentation for each module can be found in the [Perf Wiki](https://g
 A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release. 
 
 ## Distribution Naming
-A module distribution is named as follows
+The distribution is named as follows:
 
-`nvx-perf-{module}-{version}-dist-{arch}.tar.gz`
+`nvx-perf-dist-{version}-dist-{arch}.tar.gz`
 
 Valid values for `arch` are as follows:
 - linux-x86-64
 - osx-x86-64
 - win-x86-64
 
-For example, the distribution for the `persistence` module for `linux-x86-64` architecture produced by the `3.16.29` perf release is named `nvx-perf-persistence-3.16.29-dist-linux-x86-64.tar.gz`
+For example, the `linux-x86-64` distribution produced by the `3.16.29` perf release is named `nvx-perf-dist-3.16.29-dist-linux-x86-64.tar.gz`
 
 **Note**: Only Linux distributions include X Platform native libraries required for zero-garbage operation. Windows and OSX distributions can be run for development purposes, but Linux distributions are required for full performance optimization.
 
@@ -50,18 +50,18 @@ Distributions can be downloaded from the Neeve artifact repository. You will nee
 
 ```bash
 wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
-  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-{module}/{version}/nvx-perf-{module}-{version}-dist-{arch}.tar.gz
+  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-dist-{arch}.tar.gz
 ```
 
-**Example** - Download the `persistence` module for `linux-x86-64` architecture from the `3.16.29` perf release:
+**Example** - Download the `linux-x86-64` distribution from the `3.16.29` perf release:
 
 ```bash
 wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
-  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-persistence/3.16.29/nvx-perf-persistence-3.16.29-dist-linux-x86-64.tar.gz
+  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-dist-linux-x86-64.tar.gz
 ```
 
 ## Build
-This section describes how to build the module distributions from source. Please skip this section in case you are only interested in running tests using downloaded distributions.
+This section describes how to build the distribution from source. Please skip this section in case you are only interested in running tests using downloaded distributions.
 
 ### Set Up Your Environment
 
@@ -115,9 +115,9 @@ mvn clean install
 
 This builds all modules but does not create deployable distributions.
 
-#### Build Module Distributions
+#### Build Distribution
 
-To build deployable distributions, specify a platform profile:
+To build a deployable distribution, specify a platform profile:
 
 ```bash
 # For Linux (recommended for performance testing)
@@ -130,22 +130,22 @@ mvn -P osx-x86-64 clean install
 mvn -P win-x86-64 clean install
 ```
 
-Distributions are created in each module's `target/` directory.
+The distribution is created in `nvx-perf-dist/target/`.
 
 ## Running Benchmarks
 
 ### Extract Distribution
 
 ```bash
-tar xvf nvx-perf-{module}-{version}-dist-{arch}.tar.gz
-cd nvx-perf-{module}-{version}
+tar xvf nvx-perf-dist-{version}-dist-{arch}.tar.gz
+cd nvx-perf-{version}
 ```
 
 This creates the following structure:
 ```
-nvx-perf-{module}-{version}/
+nvx-perf-{version}/
 ├── conf/      # Configuration files
-└── libs/      # All dependencies
+└── libs/      # All JARs from all modules and their dependencies
 ```
 
 ### Run a Benchmark

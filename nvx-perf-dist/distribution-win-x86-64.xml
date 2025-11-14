@@ -6,23 +6,18 @@
         <format>tar.gz</format>
     </formats>
     <fileSets>
-        <fileSet>
-            <directory>${project.basedir}/target</directory>
-            <outputDirectory>/${project.artifactId}-${project.version}/libs</outputDirectory>
-            <includes>
-                <include>*.jar</include>
-            </includes>
-        </fileSet>
+        <!-- Collect all JARs (modules + dependencies) copied by maven-dependency-plugin -->
         <fileSet>
             <directory>${project.basedir}/target/dependency</directory>
-            <outputDirectory>/${project.artifactId}-${project.version}/libs</outputDirectory>
+            <outputDirectory>/nvx-perf-${project.version}/libs</outputDirectory>
             <includes>
                 <include>*.jar</include>
             </includes>
         </fileSet>
+        <!-- Collect conf files -->
         <fileSet>
-            <directory>${project.basedir}/conf</directory>
-            <outputDirectory>/${project.artifactId}-${project.version}/conf</outputDirectory>
+            <directory>${project.parent.basedir}/nvx-perf-aep/conf</directory>
+            <outputDirectory>/nvx-perf-${project.version}/conf</outputDirectory>
             <includes>
                 <include>*</include>
             </includes>
