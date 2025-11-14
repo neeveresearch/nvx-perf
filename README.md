@@ -30,7 +30,7 @@ Detailed documentation for each module can be found in the [Perf Wiki](https://g
 This section describes released distributions available for download. If you only want to run benchmarks using pre-built distributions, this section has everything you need. If you want to build from source, skip to the [Build](#build) section.
 
 ### Versioning
-A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release.
+A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release. Each perf release produces a distribution which can be downloaded, unarchived, and used to run benchmarks without requiring a build.
 
 ### Distribution Naming
 The distribution is named as follows:
