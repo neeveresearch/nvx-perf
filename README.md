@@ -25,10 +25,14 @@ Each module benchmarks a specific X Platform component:
 
 Detailed documentation for each module can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki).
 
-## Versioning
-A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release. 
+## Releases
 
-## Distribution Naming
+This section describes released distributions available for download. If you only want to run benchmarks using pre-built distributions, this section has everything you need. If you want to build from source, skip to the [Build](#build) section.
+
+### Versioning
+A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release.
+
+### Distribution Naming
 The distribution is named as follows:
 
 `nvx-perf-dist-{version}-{arch}.tar.gz` (Linux and macOS)
@@ -43,7 +47,7 @@ For example, the `linux-x86-64` distribution produced by the `3.16.29` perf rele
 
 **Note**: Only Linux distributions include X Platform native libraries required for zero-garbage operation. Windows and OSX distributions can be run for development purposes, but Linux distributions are required for full performance optimization.
 
-## Distribution Repository
+### Distribution Repository
 
 Distributions can be downloaded from the Neeve artifact repository. You will need valid credentials for access.
 
