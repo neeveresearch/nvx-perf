@@ -31,14 +31,15 @@ A Perf release is published for each released version of the X Platform (startin
 ## Distribution Naming
 The distribution is named as follows:
 
-`nvx-perf-dist-{version}-dist-{arch}.tar.gz`
+`nvx-perf-dist-{version}-{arch}.tar.gz` (Linux and macOS)
+`nvx-perf-dist-{version}-{arch}.zip` (Windows)
 
 Valid values for `arch` are as follows:
 - linux-x86-64
 - osx-x86-64
 - win-x86-64
 
-For example, the `linux-x86-64` distribution produced by the `3.16.29` perf release is named `nvx-perf-dist-3.16.29-dist-linux-x86-64.tar.gz`
+For example, the `linux-x86-64` distribution produced by the `3.16.29` perf release is named `nvx-perf-dist-3.16.29-linux-x86-64.tar.gz`
 
 **Note**: Only Linux distributions include X Platform native libraries required for zero-garbage operation. Windows and OSX distributions can be run for development purposes, but Linux distributions are required for full performance optimization.
 
@@ -50,14 +51,14 @@ Distributions can be downloaded from the Neeve artifact repository. You will nee
 
 ```bash
 wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
-  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-dist-{arch}.tar.gz
+  https://nexus.neeveresearch.com/nexus/service/local/repositories/public-releases/content/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-{arch}.tar.gz
 ```
 
 **Example** - Download the `linux-x86-64` distribution from the `3.16.29` perf release:
 
 ```bash
 wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
-  http://nexus.rumidata.io:8081/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-dist-linux-x86-64.tar.gz
+  https://nexus.neeveresearch.com/nexus/service/local/repositories/public-releases/content/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-linux-x86-64.tar.gz
 ```
 
 ## Build
@@ -137,7 +138,7 @@ The distribution is created in `nvx-perf-dist/target/`.
 ### Extract Distribution
 
 ```bash
-tar xvf nvx-perf-dist-{version}-dist-{arch}.tar.gz
+tar xvf nvx-perf-dist-{version}-{arch}.tar.gz
 cd nvx-perf-{version}
 ```
 
