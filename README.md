@@ -137,8 +137,15 @@ The distribution is created in `nvx-perf-dist/target/`.
 
 ### Extract Distribution
 
+**Linux/macOS:**
 ```bash
 tar xvf nvx-perf-dist-{version}-{arch}.tar.gz
+cd nvx-perf-{version}
+```
+
+**Windows:**
+```cmd
+unzip nvx-perf-dist-{version}-win-x86-64.zip
 cd nvx-perf-{version}
 ```
 
@@ -151,13 +158,26 @@ nvx-perf-{version}/
 
 ### Run a Benchmark
 
+**Linux/macOS:**
 ```bash
 $JAVA_HOME/bin/java -cp "libs/*" {BenchmarkClass} {parameters}
 ```
 
+**Windows:**
+```cmd
+%JAVA_HOME%\bin\java -cp "libs\*" {BenchmarkClass} {parameters}
+```
+
 **Example** - Run serialization benchmark:
+
+**Linux/macOS:**
 ```bash
 $JAVA_HOME/bin/java -cp "libs/*" com.neeve.perf.serialization.Driver --provider xbuf2.random
+```
+
+**Windows:**
+```cmd
+%JAVA_HOME%\bin\java -cp "libs\*" com.neeve.perf.serialization.Driver --provider xbuf2.random
 ```
 
 See the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki) for specific benchmark classes and parameters for each module.
