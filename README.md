@@ -57,10 +57,18 @@ Distributions can be downloaded from the Neeve artifact repository.
 wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-{arch}.tar.gz
 ```
 
-**Example** - Download the `linux-x86-64` distribution from the `3.16.29` perf release:
+**Note**: Windows distributions use `.zip` format instead of `.tar.gz`.
 
+**Examples**:
+
+Download the `linux-x86-64` distribution:
 ```bash
 wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-linux-x86-64.tar.gz
+```
+
+Download the `win-x86-64` distribution:
+```bash
+wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-win-x86-64.zip
 ```
 
 ## Build
@@ -160,26 +168,66 @@ nvx-perf-{version}/
 
 ### Run a Benchmark
 
-**Linux/macOS:**
+**With Java 8:**
+
+*Linux/macOS:*
 ```bash
 $JAVA_HOME/bin/java -cp "libs/*" {BenchmarkClass} {parameters}
 ```
 
-**Windows:**
+*Windows:*
 ```cmd
 %JAVA_HOME%\bin\java -cp "libs\*" {BenchmarkClass} {parameters}
 ```
 
+**With Java 11 or later:**
+
+When running with Java 11 and beyond, additional Java modules need to be opened. Add the following JVM parameters:
+
+*Linux/macOS:*
+```bash
+$JAVA_HOME/bin/java \
+  --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED \
+  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  --add-opens=java.base/java.nio=ALL-UNNAMED \
+  --add-opens=java.base/java.io=ALL-UNNAMED \
+  --add-opens=java.management/sun.management=ALL-UNNAMED \
+  --illegal-access=warn \
+  -cp "libs/*" {BenchmarkClass} {parameters}
+```
+
+*Windows:*
+```cmd
+%JAVA_HOME%\bin\java ^
+  --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED ^
+  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED ^
+  --add-opens=java.base/java.lang=ALL-UNNAMED ^
+  --add-opens=java.base/java.nio=ALL-UNNAMED ^
+  --add-opens=java.base/java.io=ALL-UNNAMED ^
+  --add-opens=java.management/sun.management=ALL-UNNAMED ^
+  --illegal-access=warn ^
+  -cp "libs\*" {BenchmarkClass} {parameters}
+```
+
 **Example** - Run serialization benchmark:
 
-**Linux/macOS:**
+*With Java 8 (Linux/macOS):*
 ```bash
 $JAVA_HOME/bin/java -cp "libs/*" com.neeve.perf.serialization.Driver --provider xbuf2.random
 ```
 
-**Windows:**
-```cmd
-%JAVA_HOME%\bin\java -cp "libs\*" com.neeve.perf.serialization.Driver --provider xbuf2.random
+*With Java 11+ (Linux/macOS):*
+```bash
+$JAVA_HOME/bin/java \
+  --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED \
+  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  --add-opens=java.base/java.nio=ALL-UNNAMED \
+  --add-opens=java.base/java.io=ALL-UNNAMED \
+  --add-opens=java.management/sun.management=ALL-UNNAMED \
+  --illegal-access=warn \
+  -cp "libs/*" com.neeve.perf.serialization.Driver --provider xbuf2.random
 ```
 
 See the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki) for specific benchmark classes and parameters for each module.
