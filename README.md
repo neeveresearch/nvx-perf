@@ -49,20 +49,18 @@ For example, the `linux-x86-64` distribution produced by the `3.16.29` perf rele
 
 ### Distribution Repository
 
-Distributions can be downloaded from the Neeve artifact repository. You will need valid credentials for access.
+Distributions can be downloaded from the Neeve artifact repository.
 
-**Download with credentials**:
+**Download**:
 
 ```bash
-wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
-  https://nexus.neeveresearch.com/nexus/service/local/repositories/public-releases/content/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-{arch}.tar.gz
+wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-{arch}.tar.gz
 ```
 
 **Example** - Download the `linux-x86-64` distribution from the `3.16.29` perf release:
 
 ```bash
-wget --user=YOUR_USERNAME --password=YOUR_PASSWORD \
-  https://nexus.neeveresearch.com/nexus/service/local/repositories/public-releases/content/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-linux-x86-64.tar.gz
+wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-linux-x86-64.tar.gz
 ```
 
 ## Build
