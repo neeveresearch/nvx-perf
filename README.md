@@ -23,56 +23,13 @@ Each module benchmarks a specific X Platform component:
 | Store (ODS)          | nvx-perf-storage       | Object store operations |
 | Engine (AEP)         | nvx-perf-aep           | **End-to-end canonical benchmark** |
 
-Detailed documentation for each module can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki).
+Detailed documentation for each module can be found in the [X Platform Performance Documentation](https://docs.xplatform.com/performance/benchmark-suite).
 
-## Releases
+## Pre-built Distributions
 
-This section describes released distributions available for download. If you only want to run benchmarks using pre-built distributions, this section has everything you need. If you want to build from source, skip to the [Build](#build) section.
-
-### Versioning
-A Perf release is published for each released version of the X Platform (starting with X 3.16.14). The published release has the same version as corresponding platform release. Each perf release produces a distribution which can be downloaded, unarchived, and used to run benchmarks without requiring a build.
-
-### Distribution Naming
-The distribution is named as follows:
-
-`nvx-perf-dist-{version}-{arch}.tar.gz` (Linux and macOS)
-`nvx-perf-dist-{version}-{arch}.zip` (Windows)
-
-Valid values for `arch` are as follows:
-- linux-x86-64
-- osx-x86-64
-- win-x86-64
-
-For example, the `linux-x86-64` distribution produced by the `3.16.29` perf release is named `nvx-perf-dist-3.16.29-linux-x86-64.tar.gz`
-
-**Note**: Only Linux distributions include X Platform native libraries required for zero-garbage operation. Windows and OSX distributions can be run for development purposes, but Linux distributions are required for full performance optimization.
-
-### Distribution Repository
-
-Distributions can be downloaded from the Neeve artifact repository.
-
-**Download**:
-
-```bash
-wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/{version}/nvx-perf-dist-{version}-{arch}.tar.gz
-```
-
-**Note**: Windows distributions use `.zip` format instead of `.tar.gz`.
-
-**Examples**:
-
-Download the `linux-x86-64` distribution:
-```bash
-wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-linux-x86-64.tar.gz
-```
-
-Download the `win-x86-64` distribution:
-```bash
-wget https://nexus.n5corp.com/repository/maven-public/com/neeve/nvx-perf-dist/3.16.29/nvx-perf-dist-3.16.29-win-x86-64.zip
-```
+Pre-built distributions are available for download for every X Platform release. If you want to run benchmarks without building from source, see the [Benchmark Suite documentation](https://docs.xplatform.com/performance/benchmark-suite) for information on downloading distributions and running benchmarks.
 
 ## Build
-This section describes how to build the distribution from source. Please skip this section in case you are only interested in running tests using downloaded distributions.
 
 ### Set Up Your Environment
 
@@ -143,94 +100,13 @@ mvn -P win-x86-64 clean install
 
 The distribution is created in `nvx-perf-dist/target/`.
 
-## Running Benchmarks
+## Documentation
 
-### Extract Distribution
+Complete documentation for the X Platform Performance Benchmark Suite is available at:
 
-**Linux/macOS:**
-```bash
-tar xvf nvx-perf-dist-{version}-{arch}.tar.gz
-cd nvx-perf-{version}
-```
+**[X Platform Performance Documentation](https://docs.xplatform.com/performance)**
 
-**Windows:**
-```cmd
-unzip nvx-perf-dist-{version}-win-x86-64.zip
-cd nvx-perf-{version}
-```
-
-This creates the following structure:
-```
-nvx-perf-{version}/
-├── conf/      # Configuration files
-└── libs/      # All JARs from all modules and their dependencies
-```
-
-### Run a Benchmark
-
-**With Java 8:**
-
-*Linux/macOS:*
-```bash
-$JAVA_HOME/bin/java -cp "libs/*" {BenchmarkClass} {parameters}
-```
-
-*Windows:*
-```cmd
-%JAVA_HOME%\bin\java -cp "libs\*" {BenchmarkClass} {parameters}
-```
-
-**With Java 11 or later:**
-
-When running with Java 11 and beyond, additional Java modules need to be opened. Add the following JVM parameters:
-
-*Linux/macOS:*
-```bash
-$JAVA_HOME/bin/java \
-  --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED \
-  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
-  --add-opens=java.base/java.lang=ALL-UNNAMED \
-  --add-opens=java.base/java.nio=ALL-UNNAMED \
-  --add-opens=java.base/java.io=ALL-UNNAMED \
-  --add-opens=java.management/sun.management=ALL-UNNAMED \
-  --illegal-access=warn \
-  -cp "libs/*" {BenchmarkClass} {parameters}
-```
-
-*Windows:*
-```cmd
-%JAVA_HOME%\bin\java ^
-  --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED ^
-  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED ^
-  --add-opens=java.base/java.lang=ALL-UNNAMED ^
-  --add-opens=java.base/java.nio=ALL-UNNAMED ^
-  --add-opens=java.base/java.io=ALL-UNNAMED ^
-  --add-opens=java.management/sun.management=ALL-UNNAMED ^
-  --illegal-access=warn ^
-  -cp "libs\*" {BenchmarkClass} {parameters}
-```
-
-**Example** - Run serialization benchmark:
-
-*With Java 8 (Linux/macOS):*
-```bash
-$JAVA_HOME/bin/java -cp "libs/*" com.neeve.perf.serialization.Driver --provider xbuf2.random
-```
-
-*With Java 11+ (Linux/macOS):*
-```bash
-$JAVA_HOME/bin/java \
-  --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED \
-  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
-  --add-opens=java.base/java.lang=ALL-UNNAMED \
-  --add-opens=java.base/java.nio=ALL-UNNAMED \
-  --add-opens=java.base/java.io=ALL-UNNAMED \
-  --add-opens=java.management/sun.management=ALL-UNNAMED \
-  --illegal-access=warn \
-  -cp "libs/*" com.neeve.perf.serialization.Driver --provider xbuf2.random
-```
-
-See the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki) for specific benchmark classes and parameters for each module.
-
-## Next Steps
-Detailed information about each of the perf modules, the test programs contained in each module and various parameters to those tests can be found in the [Perf Wiki](https://github.com/neeveresearch/nvx-perf/wiki). 
+This includes:
+- **[Canonical Benchmark Results](https://docs.xplatform.com/performance/canonical-benchmark)** - Official end-to-end performance metrics
+- **[Benchmark Suite Modules](https://docs.xplatform.com/performance/benchmark-suite/modules)** - Detailed documentation for all 7 benchmark modules
+- **[Test Methodology](https://docs.xplatform.com/performance/canonical-benchmark/test-description)** - Complete test configuration and methodology 
