@@ -7,6 +7,6 @@
     <parent>
         <groupId>com.neeve</groupId>
         <artifactId>nvx-perf-parent</artifactId>
-        <version>3.16.36</version>
+        <version>3.16-SNAPSHOT</version>
     </parent>
 </project>
