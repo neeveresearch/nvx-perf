@@ -228,18 +228,4 @@
             </releases>
         </pluginRepository>
     </pluginRepositories>
-
-    <profiles>
-        <profile>
-            <id>linux-x86-64</id>
-            <dependencies>
-                <dependency>
-                    <groupId>com.neeve</groupId>
-                    <artifactId>nvx-native</artifactId>
-                    <classifier>linux-x86-64</classifier>
-                    <version>${nvx.native.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-    </profiles>
 </project>
