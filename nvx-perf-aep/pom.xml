@@ -11,7 +11,7 @@
     </parent>
 
     <properties>
-        <nvx.robin.version>3.0.22</nvx.robin.version>
+        <nvx.robin.version>2.12.18</nvx.robin.version>
     </properties>
 
     <dependencies>
