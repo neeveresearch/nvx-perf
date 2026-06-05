@@ -27,11 +27,11 @@
     </licenses>
 
     <properties>
-        <nvx.talon.version>3.16.72</nvx.talon.version>
-        <nvx.solace.version>3.16.35</nvx.solace.version>
-        <nvx.jms.version>3.16.33</nvx.jms.version>
+        <nvx.talon.version>3.16.73</nvx.talon.version>
+        <nvx.solace.version>3.16.36</nvx.solace.version>
+        <nvx.jms.version>3.16.34</nvx.jms.version>
         <nvx.kafka.version>1.8.31</nvx.kafka.version>
-        <nvx.native.version>3.16.60</nvx.native.version>
+        <nvx.native.version>3.16.65</nvx.native.version>
     </properties>
 
     <modules>
