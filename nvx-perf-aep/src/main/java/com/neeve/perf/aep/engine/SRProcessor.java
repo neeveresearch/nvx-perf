@@ -273,6 +273,11 @@ final public class SRProcessor extends Processor {
         final CmdLineParser.Option clusteringDetachedDispatchQueueDepthOption = parser.addIntegerOption('Q', "clusteringDetachedDispatchQueueDepth");
         final CmdLineParser.Option clusteringDetachedDispatcherCPUAffinityMaskOption = parser.addStringOption('A', "clusteringDetachedDispatcherCPUAffinityMask");
 
+        // engine commit related options
+        final CmdLineParser.Option capturePerTransactionStatsOption = parser.addBooleanOption('R', "capturePerTransactionStats");
+        final CmdLineParser.Option noPerTransactionStatsLoggingOption = parser.addBooleanOption('N', "noPerTransactionStatsLogging");
+        final CmdLineParser.Option disableLeg2InStoreThreadOption = parser.addBooleanOption('L', "disableLeg2InStoreThread");
+
         // help 
         final CmdLineParser.Option helpOption = parser.addBooleanOption('h', "help");
 
@@ -368,6 +373,15 @@ final public class SRProcessor extends Processor {
                 boolean clusteringDetachedDispatch = (Boolean)parser.getOptionValue(clusteringDetachedDispatchOption, false);
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH, clusteringDetachedDispatch ? "true" : "false");
                 System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH_QUEUE_DEPTH, String.valueOf(parser.getOptionValue(clusteringDetachedDispatchQueueDepthOption, 1024)));
+                // ...engine commit
+                //    per transaction stats logging follows the capture flag unless explicitly suppressed,
+                //    since capturing without logging gives nothing to inspect
+                final boolean capturePerTransactionStats = (Boolean)parser.getOptionValue(capturePerTransactionStatsOption, false);
+                System.setProperty(ConfigProperties.PROP_ENGINE_CAPTURE_PER_TRANSACTION_STATS, capturePerTransactionStats ? "true" : "false");
+                final boolean noPerTransactionStatsLogging = (Boolean)parser.getOptionValue(noPerTransactionStatsLoggingOption, false);
+                System.setProperty(ConfigProperties.PROP_ENGINE_PER_TRANSACTION_STATS_LOGGING_POLICY, (capturePerTransactionStats && !noPerTransactionStatsLogging) ? "UseDedicated" : "Off");
+                System.setProperty(ConfigProperties.PROP_ENGINE_LEG2_IN_STORE_THREAD, (Boolean)parser.getOptionValue(disableLeg2InStoreThreadOption, false) ? "false" : "true");
+
                 final String clusteringDetachedDispatcherCPUAffinityMask = (String)parser.getOptionValue(clusteringDetachedDispatcherCPUAffinityMaskOption, null);
                 if (clusteringDetachedDispatcherCPUAffinityMask != null) {
                     System.setProperty(ConfigProperties.PROP_CLUSTERING_DETACHED_DISPATCH_QUEUE_DRAINER_CPU_AFFINITY_MASK, clusteringDetachedDispatcherCPUAffinityMask);

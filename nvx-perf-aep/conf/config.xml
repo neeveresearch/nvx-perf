@@ -82,6 +82,9 @@
             <setSupportMetadata>false</setSupportMetadata>
             <setOutboundSequenceNumbers>false</setOutboundSequenceNumbers>
             <captureTransactionLatencyStats>false</captureTransactionLatencyStats>
+            <capturePerTransactionStats>${CAPTURE_PER_TRANSACTION_STATS::false}</capturePerTransactionStats>
+            <perTransactionStatsLogging policy="${PER_TRANSACTION_STATS_LOGGING_POLICY::Off}"/>
+            <leg2InStoreThread>${LEG2_IN_STORE_THREAD::true}</leg2InStoreThread>
         </app>
     </apps>
 
