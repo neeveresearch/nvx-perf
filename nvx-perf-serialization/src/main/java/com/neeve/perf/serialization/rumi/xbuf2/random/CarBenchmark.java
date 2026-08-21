@@ -169,10 +169,12 @@ public class CarBenchmark implements Provider<Car> {
         }
 
         Engine engine = pojo.getEngine();
-        final Engine.Pojo epojo = engine.pojo();
-        epojo.getCapacity();
-        epojo.getNumCylinders();
-        epojo.getManufacturerCode();
+        if (engine != null) {
+            final Engine.Pojo epojo = engine.pojo();
+            epojo.getCapacity();
+            epojo.getNumCylinders();
+            epojo.getManufacturerCode();
+        }
 
         final XIterator<FuelFigure> fuelFigureIterator = pojo.getFuelFigureIterator();
         while (fuelFigureIterator.hasNext()) {
